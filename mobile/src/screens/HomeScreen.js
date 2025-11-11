@@ -21,14 +21,19 @@ import {
 } from 'react-native';
 import { accountService, transactionService as upTransactionService } from '../services/upBank';
 import { transactionService, realtimeService } from '../services/supabase';
+import { profileService } from '../services/ai';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function HomeScreen({ navigation }) {
   const [balance, setBalance] = useState(null);
   const [todayTransactions, setTodayTransactions] = useState([]);
   const [pendingInterventions, setPendingInterventions] = useState([]);
+  const [daysClean, setDaysClean] = useState(0);
+  const [savingsGoal, setSavingsGoal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const userId = 'temp-user-id'; // TODO: Get from auth
 
   useEffect(() => {
     loadData();
@@ -54,6 +59,25 @@ export default function HomeScreen({ navigation }) {
       // Load pending interventions
       const pending = await transactionService.getPendingInterventions();
       setPendingInterventions(pending);
+
+      // Load clean streak and profile data
+      try {
+        const cleanStreak = await profileService.getCleanStreak(userId);
+        if (cleanStreak) {
+          setDaysClean(cleanStreak.days_clean || 0);
+        }
+
+        const profile = await profileService.getProfile(userId);
+        if (profile && profile.savings_goal_amount) {
+          setSavingsGoal({
+            amount: profile.savings_goal_amount,
+            purpose: profile.savings_goal_purpose
+          });
+        }
+      } catch (profileError) {
+        // Profile might not exist yet (user hasn't onboarded)
+        console.log('No profile found:', profileError);
+      }
 
       // If there are pending interventions, navigate to alert screen
       if (pending.length > 0) {
@@ -142,6 +166,49 @@ export default function HomeScreen({ navigation }) {
           <View style={[styles.statusDot, { backgroundColor: '#34c759' }]} />
           <Text style={styles.statusText}>Protected by Anchor</Text>
         </View>
+      </View>
+
+      {/* Stats Row - Days Clean & Savings */}
+      <View style={styles.statsRow}>
+        {/* Days Clean Counter */}
+        <View style={styles.statCard}>
+          <Ionicons name="shield-checkmark" size={32} color="#34c759" />
+          <Text style={styles.statNumber}>{daysClean}</Text>
+          <Text style={styles.statLabel}>Days Clean</Text>
+        </View>
+
+        {/* Savings Progress */}
+        {savingsGoal && (
+          <View style={styles.statCard}>
+            <Ionicons name="trending-up" size={32} color="#007AFF" />
+            <Text style={styles.statNumber}>
+              ${/* TODO: Get actual savings amount from vault */}0
+            </Text>
+            <Text style={styles.statLabel}>
+              of ${savingsGoal.amount}
+            </Text>
+            <Text style={styles.statSubLabel}>{savingsGoal.purpose}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Payment Request Button */}
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.paymentRequestButton}
+          onPress={() => navigation.navigate('PaymentRequest', { userId })}
+        >
+          <View style={styles.paymentRequestIcon}>
+            <Ionicons name="cash-outline" size={24} color="#007AFF" />
+          </View>
+          <View style={styles.paymentRequestText}>
+            <Text style={styles.paymentRequestTitle}>Request Payment</Text>
+            <Text style={styles.paymentRequestSubtitle}>
+              For non-whitelisted payees
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#8e8e93" />
+        </TouchableOpacity>
       </View>
 
       {/* Today's Transactions */}
@@ -346,5 +413,66 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     marginLeft: 12,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginBottom: 24,
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#1c1c1e',
+    padding: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  statNumber: {
+    color: '#fff',
+    fontSize: 32,
+    fontWeight: 'bold',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  statLabel: {
+    color: '#8e8e93',
+    fontSize: 14,
+  },
+  statSubLabel: {
+    color: '#8e8e93',
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  paymentRequestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1c1c1e',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  paymentRequestIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#2c2c2e',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  paymentRequestText: {
+    flex: 1,
+  },
+  paymentRequestTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  paymentRequestSubtitle: {
+    color: '#8e8e93',
+    fontSize: 14,
   },
 });

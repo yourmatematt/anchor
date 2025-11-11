@@ -3,8 +3,8 @@
  *
  * CRITICAL INTERVENTION SCREEN
  * - Full-screen takeover when non-whitelisted transaction detected
- * - CANNOT dismiss without recording voice memo
- * - Forces accountability through voice recording
+ * - CANNOT dismiss without completing AI conversation
+ * - Forces accountability through voice/text conversation with AI
  */
 
 import React, { useState, useEffect } from 'react';
@@ -18,74 +18,57 @@ import {
   BackHandler
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import VoiceRecorder from '../components/VoiceRecorder';
-import { transactionService } from '../services/supabase';
+import { conversationService } from '../services/ai';
 
 export default function AlertScreen({ route, navigation }) {
   const { transaction } = route.params;
-  const [hasRecorded, setHasRecorded] = useState(false);
-  const [isDismissing, setIsDismissing] = useState(false);
+  const [hasStartedConversation, setHasStartedConversation] = useState(false);
+
+  const userId = 'temp-user-id'; // TODO: Get from auth
 
   useEffect(() => {
     // Prevent back button from dismissing
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!hasRecorded) {
-        Alert.alert(
-          'Voice Memo Required',
-          'You must record a voice memo explaining this transaction before continuing.',
-          [{ text: 'OK' }]
-        );
-        return true; // Prevent default back behavior
-      }
-      return false;
+      Alert.alert(
+        'Can\'t Leave Yet',
+        'You need to talk to me about this transaction first.',
+        [{ text: 'OK' }]
+      );
+      return true; // Prevent default back behavior
     });
 
     return () => backHandler.remove();
-  }, [hasRecorded]);
+  }, []);
 
-  async function handleRecordingComplete(voiceMemoUri, transcript) {
-    setHasRecorded(true);
+  /**
+   * Start AI conversation about the intervention
+   */
+  function handleStartConversation() {
+    setHasStartedConversation(true);
 
-    try {
-      // In production, you would:
-      // 1. Upload audio file to Supabase Storage
-      // 2. Get public URL
-      // For MVP, we'll use a placeholder URL
-
-      const placeholderUrl = `file://${voiceMemoUri}`;
-
-      // Update transaction with voice memo
-      await transactionService.updateVoiceMemo(
-        transaction.transaction_id,
-        placeholderUrl,
-        transcript
-      );
-
-      // Allow dismissal after 2 seconds
-      setTimeout(() => {
-        setIsDismissing(true);
-      }, 2000);
-
-    } catch (error) {
-      console.error('Error saving voice memo:', error);
-      Alert.alert('Error', 'Failed to save voice memo. Please try again.');
-      setHasRecorded(false);
-    }
+    // Navigate to conversation screen
+    navigation.navigate('Conversation', {
+      userId,
+      conversationType: 'intervention',
+      initialMessage: `Hang on mate. You just sent $${Math.abs(transaction.amount)} to ${transaction.payee_name}. What's going on?`,
+      context: {
+        transaction_id: transaction.transaction_id,
+        transaction: {
+          amount: transaction.amount,
+          payee_name: transaction.payee_name,
+          timestamp: transaction.timestamp,
+          description: transaction.description
+        }
+      }
+    });
   }
 
   function handleDismiss() {
-    if (!hasRecorded) {
-      Alert.alert(
-        'Voice Memo Required',
-        'You must record a voice memo explaining this transaction before continuing.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    if (isDismissing) {
-      navigation.goBack();
-    }
+    Alert.alert(
+      'Can\'t Leave Yet',
+      'You need to talk to me about this transaction first.',
+      [{ text: 'OK' }]
+    );
   }
 
   return (
@@ -131,33 +114,28 @@ export default function AlertScreen({ route, navigation }) {
             This transaction is NOT on your whitelist.
           </Text>
           <Text style={styles.warningSubtext}>
-            You must record a voice memo explaining why you're making this transaction.
+            We need to talk about this.
           </Text>
         </View>
 
-        {/* Voice Recorder */}
-        <View style={styles.recorderContainer}>
-          <VoiceRecorder onRecordingComplete={handleRecordingComplete} />
+        {/* Start Conversation Button */}
+        <TouchableOpacity
+          style={styles.conversationButton}
+          onPress={handleStartConversation}
+        >
+          <Ionicons name="chatbubbles" size={24} color="#fff" />
+          <Text style={styles.conversationButtonText}>
+            {hasStartedConversation ? 'Continue Conversation' : 'Talk to Anchor'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Ionicons name="lock-closed" size={16} color="#8e8e93" />
+          <Text style={styles.footerText}>
+            Conversation required to continue
+          </Text>
         </View>
-
-        {/* Dismiss Button (only enabled after recording) */}
-        {isDismissing && (
-          <TouchableOpacity
-            style={[styles.dismissButton, hasRecorded && styles.dismissButtonEnabled]}
-            onPress={handleDismiss}
-          >
-            <Text style={styles.dismissButtonText}>Continue</Text>
-          </TouchableOpacity>
-        )}
-
-        {!hasRecorded && (
-          <View style={styles.footer}>
-            <Ionicons name="lock-closed" size={16} color="#8e8e93" />
-            <Text style={styles.footerText}>
-              Recording required to continue
-            </Text>
-          </View>
-        )}
       </View>
     </Modal>
   );
@@ -232,22 +210,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     lineHeight: 20,
   },
-  recorderContainer: {
-    marginBottom: 32,
-  },
-  dismissButton: {
-    backgroundColor: '#2c2c2e',
+  conversationButton: {
+    flexDirection: 'row',
+    backgroundColor: '#007AFF',
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
   },
-  dismissButtonEnabled: {
-    backgroundColor: '#007AFF',
-  },
-  dismissButtonText: {
+  conversationButtonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+    marginLeft: 12,
   },
   footer: {
     flexDirection: 'row',

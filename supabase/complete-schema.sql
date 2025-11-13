@@ -71,6 +71,9 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   allowance_account_id TEXT,
   bills_account_id TEXT,
 
+  -- Push notification token
+  push_token TEXT,
+
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
 
@@ -305,6 +308,157 @@ CREATE TABLE IF NOT EXISTS budget_surplus (
 );
 
 -- =====================================================
+-- PART 3B: PHASE 2 ADVISORY SYSTEM TABLES
+-- =====================================================
+
+-- Manual payment instructions tracking
+-- Since Up Bank API cannot execute payments, we provide instructions
+-- and track when users complete them manually
+CREATE TABLE IF NOT EXISTS manual_payment_instructions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID,
+
+  -- What was approved
+  payment_request_id UUID REFERENCES payment_requests(id),
+  approved_amount DECIMAL NOT NULL,
+  purpose TEXT NOT NULL,
+
+  -- Instructions given to user
+  instructions JSONB NOT NULL, -- Array of step-by-step instructions
+
+  -- Expected action (for tracking completion)
+  expected_transfer_from TEXT, -- 'Vault', 'Transaction Account', 'Bills'
+  expected_transfer_to TEXT, -- 'Allowance', 'Transaction Account', or external BSB/Account
+  expected_amount DECIMAL,
+  expected_payee TEXT, -- For external payments
+
+  -- Tracking
+  instructions_sent_at TIMESTAMP DEFAULT NOW(),
+  timeout_at TIMESTAMP, -- When instructions expire
+  completed_at TIMESTAMP,
+  completed_transaction_id TEXT, -- Up transaction ID that fulfilled this
+
+  -- Status
+  status TEXT DEFAULT 'awaiting_action', -- 'awaiting_action', 'completed', 'timeout', 'cancelled'
+
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Bill reminder tracking
+-- Prevents duplicate reminders and tracks bill payment completion
+CREATE TABLE IF NOT EXISTS bill_reminders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID,
+
+  -- Bill details
+  payee_id UUID REFERENCES whitelisted_payees(id),
+  due_date DATE NOT NULL,
+  amount DECIMAL NOT NULL,
+
+  -- Reminder tracking
+  reminder_sent_at TIMESTAMP,
+  reminder_type TEXT, -- '3_days', '1_day', 'overdue'
+
+  -- Completion
+  paid BOOLEAN DEFAULT FALSE,
+  paid_at TIMESTAMP,
+  paid_transaction_id TEXT,
+
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Debt acceleration opportunities
+-- Logs when user was offered debt acceleration vs when they accepted
+CREATE TABLE IF NOT EXISTS debt_acceleration_opportunities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID,
+
+  -- Opportunity details
+  vault_balance DECIMAL NOT NULL,
+  emergency_buffer DECIMAL NOT NULL,
+  upcoming_bills_total DECIMAL NOT NULL,
+  safe_to_send DECIMAL NOT NULL,
+
+  -- Target debt
+  debt_payee_id UUID REFERENCES whitelisted_payees(id),
+  current_debt_balance DECIMAL,
+  new_debt_balance DECIMAL, -- After acceleration
+  months_saved DECIMAL,
+
+  -- User response
+  offered_at TIMESTAMP DEFAULT NOW(),
+  user_response TEXT, -- 'accepted', 'declined', 'ignored'
+  response_at TIMESTAMP,
+
+  -- If accepted, link to payment instruction
+  payment_instruction_id UUID REFERENCES manual_payment_instructions(id),
+
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Budget surplus events
+-- Monthly surplus detection history
+CREATE TABLE IF NOT EXISTS budget_surplus_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID,
+
+  -- Month tracked
+  month_year TEXT NOT NULL, -- 'YYYY-MM'
+
+  -- Category details
+  category TEXT NOT NULL, -- 'groceries', 'fuel', etc
+  budgeted_amount DECIMAL NOT NULL,
+  actual_spent DECIMAL NOT NULL,
+
+  -- Adjustments (e.g., staff meals from Scallys)
+  adjustments JSONB, -- {staff_meals: 45, etc}
+  effective_budget DECIMAL,
+
+  -- Surplus
+  surplus_amount DECIMAL NOT NULL,
+
+  -- User response
+  offered_debt_payment BOOLEAN DEFAULT FALSE,
+  user_accepted BOOLEAN,
+  payment_instruction_id UUID REFERENCES manual_payment_instructions(id),
+
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Scallys income tracking
+-- Tracks irregular income from Scallys work with tax and meal offsets
+CREATE TABLE IF NOT EXISTS scallys_income_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID,
+
+  -- Deposit details
+  irregular_deposit_id UUID REFERENCES irregular_deposits(id),
+  transaction_id TEXT,
+  amount DECIMAL NOT NULL,
+  deposit_date DATE NOT NULL,
+
+  -- Work details (from user interrogation)
+  hours_worked DECIMAL,
+  shifts_worked INTEGER,
+  hourly_rate DECIMAL DEFAULT 40.00,
+
+  -- Calculations
+  gross_income DECIMAL, -- hours * rate
+  tax_withholding_30 DECIMAL, -- 30% for tax
+  staff_meals_offset DECIMAL, -- shifts * $15
+
+  -- Applied to budget
+  groceries_budget_adjusted BOOLEAN DEFAULT FALSE,
+  adjustment_amount DECIMAL, -- How much groceries budget was reduced
+
+  -- Tax tracking
+  tax_saver_transfer_instructed BOOLEAN DEFAULT FALSE,
+  tax_saver_transfer_completed BOOLEAN DEFAULT FALSE,
+
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- =====================================================
 -- PART 4: INDEXES
 -- =====================================================
 
@@ -331,6 +485,15 @@ CREATE INDEX IF NOT EXISTS idx_irregular_deposits_type ON irregular_deposits(sou
 CREATE INDEX IF NOT EXISTS idx_reminders_user_status ON reminders(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_reminders_scheduled ON reminders(scheduled_for);
 CREATE INDEX IF NOT EXISTS idx_budget_categories_user ON budget_categories(user_id);
+
+-- Phase 2 indexes
+CREATE INDEX IF NOT EXISTS idx_manual_payment_status ON manual_payment_instructions(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_manual_payment_timeout ON manual_payment_instructions(timeout_at) WHERE status = 'awaiting_action';
+CREATE INDEX IF NOT EXISTS idx_bill_reminders_user ON bill_reminders(user_id, due_date);
+CREATE INDEX IF NOT EXISTS idx_bill_reminders_unpaid ON bill_reminders(user_id, paid) WHERE paid = FALSE;
+CREATE INDEX IF NOT EXISTS idx_debt_acceleration_user ON debt_acceleration_opportunities(user_id);
+CREATE INDEX IF NOT EXISTS idx_budget_surplus_user_month ON budget_surplus_events(user_id, month_year);
+CREATE INDEX IF NOT EXISTS idx_scallys_income_user ON scallys_income_events(user_id, deposit_date DESC);
 
 -- =====================================================
 -- PART 5: FUNCTIONS & TRIGGERS
@@ -436,6 +599,11 @@ ALTER TABLE predatory_lenders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE budget_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE budget_surplus ENABLE ROW LEVEL SECURITY;
+ALTER TABLE manual_payment_instructions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bill_reminders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE debt_acceleration_opportunities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE budget_surplus_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE scallys_income_events ENABLE ROW LEVEL SECURITY;
 
 -- For MVP (single user), allow all operations
 -- In production, add proper user authentication policies
@@ -453,7 +621,10 @@ BEGIN
             'whitelist', 'transactions', 'user_profiles', 'conversations',
             'payment_requests', 'daily_allowances', 'interventions',
             'whitelisted_payees', 'irregular_deposits', 'predatory_lenders',
-            'reminders', 'budget_categories', 'budget_surplus'
+            'reminders', 'budget_categories', 'budget_surplus',
+            'manual_payment_instructions', 'bill_reminders',
+            'debt_acceleration_opportunities', 'budget_surplus_events',
+            'scallys_income_events'
           )
     LOOP
         EXECUTE format('DROP POLICY IF EXISTS "Allow all operations on %I" ON %I', tbl_name, tbl_name);

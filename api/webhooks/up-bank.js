@@ -10,6 +10,11 @@
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { USER_ID } = require('../config/constants');
+const {
+  notifyPaymentCompleted,
+  notifyIrregularDeposit,
+  notifyNonWhitelistedTransaction
+} = require('../services/notifications');
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -82,31 +87,14 @@ async function logTransaction(transaction, isWhitelisted) {
  * This triggers the Alert Screen on the mobile app
  */
 async function sendAlert(transaction) {
-  // TODO: Implement push notification via Expo or Firebase
-  // For now, the mobile app will poll for non-whitelisted transactions
   console.log('ALERT: Non-whitelisted transaction detected', {
     amount: transaction.attributes.amount.value,
     payee: transaction.attributes.description,
     id: transaction.id
   });
 
-  // In production, this would send an Expo push notification:
-  // await fetch('https://exp.host/--/api/v2/push/send', {
-  //   method: 'POST',
-  //   headers: {
-  //     'Accept': 'application/json',
-  //     'Content-Type': 'application/json',
-  //   },
-  //   body: JSON.stringify({
-  //     to: userPushToken,
-  //     sound: 'default',
-  //     title: '⚠️ ANCHOR ALERT',
-  //     body: `You just sent ${transaction.attributes.amount.value} to ${transaction.attributes.description}`,
-  //     data: { transactionId: transaction.id },
-  //     priority: 'high',
-  //     badge: 1
-  //   })
-  // });
+  // Send push notification
+  await notifyNonWhitelistedTransaction(USER_ID, transaction);
 }
 
 /**
@@ -269,6 +257,109 @@ async function createDepositIntervention(transaction, irregularDeposit, classifi
 }
 
 /**
+ * Check if transaction completes a pending manual payment instruction
+ * Returns the instruction if matched, null otherwise
+ */
+async function checkManualPaymentCompletion(transaction) {
+  const amount = Math.abs(parseFloat(transaction.attributes.amount.value));
+  const description = transaction.attributes.description;
+
+  // Get pending instructions (most recent first)
+  const { data: pendingInstructions, error } = await supabase
+    .from('manual_payment_instructions')
+    .select('*')
+    .eq('user_id', USER_ID)
+    .eq('status', 'awaiting_action')
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (error || !pendingInstructions || pendingInstructions.length === 0) {
+    return null;
+  }
+
+  // Check each pending instruction for a match
+  for (const instruction of pendingInstructions) {
+    // Check if amount matches (within $1 tolerance for potential fees)
+    const expectedAmount = parseFloat(instruction.expected_amount);
+    const amountMatches = Math.abs(amount - expectedAmount) <= 1;
+
+    if (!amountMatches) {
+      continue;
+    }
+
+    // Check if payee matches (for external payments)
+    if (instruction.expected_payee) {
+      const payeeMatches = description.toLowerCase().includes(
+        instruction.expected_payee.toLowerCase()
+      );
+
+      if (payeeMatches) {
+        return instruction;
+      }
+    }
+
+    // Check for Vault → Allowance transfers
+    if (instruction.expected_transfer_from === 'Vault' &&
+        instruction.expected_transfer_to === 'Allowance') {
+      // Look for "Vault" or "Allowance" in description
+      if (description.toLowerCase().includes('vault') ||
+          description.toLowerCase().includes('allowance')) {
+        return instruction;
+      }
+    }
+
+    // Check for Vault → Transaction Account transfers
+    if (instruction.expected_transfer_from === 'Vault' &&
+        instruction.expected_transfer_to === 'Transaction Account') {
+      if (description.toLowerCase().includes('vault') ||
+          description.toLowerCase().includes('transaction')) {
+        return instruction;
+      }
+    }
+
+    // If amount matches and it's the most recent pending instruction,
+    // assume it's a match (last resort)
+    if (amountMatches && instruction === pendingInstructions[0]) {
+      return instruction;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Mark manual payment instruction as completed
+ */
+async function completeManualPaymentInstruction(instruction, transaction) {
+  const { error } = await supabase
+    .from('manual_payment_instructions')
+    .update({
+      completed_at: new Date().toISOString(),
+      completed_transaction_id: transaction.id,
+      status: 'completed'
+    })
+    .eq('id', instruction.id);
+
+  if (error) {
+    console.error('Error marking instruction as completed:', error);
+    throw error;
+  }
+
+  // Also update the linked payment request if exists
+  if (instruction.payment_request_id) {
+    await supabase
+      .from('payment_requests')
+      .update({
+        executed_at: new Date().toISOString(),
+        execution_method: 'manual'
+      })
+      .eq('id', instruction.payment_request_id);
+  }
+
+  return true;
+}
+
+/**
  * Main webhook handler
  */
 export default async function handler(req, res) {
@@ -361,11 +452,32 @@ export default async function handler(req, res) {
           type: depositClassification.type,
           risk_level: depositClassification.risk_level
         });
+
+        // Send push notification
+        await notifyIrregularDeposit(USER_ID, irregularDeposit);
       }
     }
 
-    // If NOT whitelisted (outgoing transaction), trigger alert
-    if (!whitelisted && !isIncomingDeposit) {
+    // Check if this transaction completes a pending manual payment instruction
+    const matchedInstruction = await checkManualPaymentCompletion(transactionData);
+    let instructionCompleted = false;
+
+    if (matchedInstruction) {
+      await completeManualPaymentInstruction(matchedInstruction, transactionData);
+      instructionCompleted = true;
+
+      console.log('Manual payment instruction completed:', {
+        instruction_id: matchedInstruction.id,
+        amount: transactionData.attributes.amount.value,
+        purpose: matchedInstruction.purpose
+      });
+
+      // Send push notification confirming completion
+      await notifyPaymentCompleted(USER_ID, matchedInstruction);
+    }
+
+    // If NOT whitelisted (outgoing transaction) and NOT a manual instruction completion, trigger alert
+    if (!whitelisted && !isIncomingDeposit && !instructionCompleted) {
       await sendAlert(transactionData);
     }
 
@@ -379,7 +491,9 @@ export default async function handler(req, res) {
         type: depositClassification.type,
         needs_interrogation: depositClassification.needs_interrogation,
         risk_level: depositClassification.risk_level
-      } : null
+      } : null,
+      manualInstructionCompleted: instructionCompleted,
+      instructionId: matchedInstruction?.id || null
     });
 
   } catch (error) {

@@ -19,12 +19,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { conversationService } from '../services/ai';
+import { USER_ID } from '../constants';
 
 export default function AlertScreen({ route, navigation }) {
   const { transaction } = route.params;
   const [hasStartedConversation, setHasStartedConversation] = useState(false);
-
-  const userId = 'temp-user-id'; // TODO: Get from auth
 
   useEffect(() => {
     // Prevent back button from dismissing
@@ -48,7 +47,7 @@ export default function AlertScreen({ route, navigation }) {
 
     // Navigate to conversation screen
     navigation.navigate('Conversation', {
-      userId,
+      userId: USER_ID,
       conversationType: 'intervention',
       initialMessage: `Hang on mate. You just sent $${Math.abs(transaction.amount)} to ${transaction.payee_name}. What's going on?`,
       context: {

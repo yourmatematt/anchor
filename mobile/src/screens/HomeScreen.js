@@ -23,6 +23,7 @@ import { accountService, transactionService as upTransactionService } from '../s
 import { transactionService, realtimeService } from '../services/supabase';
 import { profileService } from '../services/ai';
 import { Ionicons } from '@expo/vector-icons';
+import { USER_ID } from '../constants';
 
 export default function HomeScreen({ navigation }) {
   const [balance, setBalance] = useState(null);
@@ -32,8 +33,6 @@ export default function HomeScreen({ navigation }) {
   const [savingsGoal, setSavingsGoal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  const userId = 'temp-user-id'; // TODO: Get from auth
 
   useEffect(() => {
     loadData();
@@ -62,12 +61,12 @@ export default function HomeScreen({ navigation }) {
 
       // Load clean streak and profile data
       try {
-        const cleanStreak = await profileService.getCleanStreak(userId);
+        const cleanStreak = await profileService.getCleanStreak(USER_ID);
         if (cleanStreak) {
           setDaysClean(cleanStreak.days_clean || 0);
         }
 
-        const profile = await profileService.getProfile(userId);
+        const profile = await profileService.getProfile(USER_ID);
         if (profile && profile.savings_goal_amount) {
           setSavingsGoal({
             amount: profile.savings_goal_amount,
@@ -196,7 +195,7 @@ export default function HomeScreen({ navigation }) {
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.paymentRequestButton}
-          onPress={() => navigation.navigate('PaymentRequest', { userId })}
+          onPress={() => navigation.navigate('PaymentRequest', { userId: USER_ID })}
         >
           <View style={styles.paymentRequestIcon}>
             <Ionicons name="cash-outline" size={24} color="#007AFF" />

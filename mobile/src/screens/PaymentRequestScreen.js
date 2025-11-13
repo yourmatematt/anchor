@@ -19,14 +19,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { paymentRequestService } from '../services/ai';
+import { USER_ID } from '../constants';
 
 export default function PaymentRequestScreen({ navigation, route }) {
   const [amount, setAmount] = useState('');
   const [payeeName, setPayeeName] = useState('');
   const [reason, setReason] = useState('');
   const [isEvaluating, setIsEvaluating] = useState(false);
-
-  const userId = route.params?.userId || 'temp-user-id'; // TODO: Get from auth
 
   /**
    * Submit payment request for AI evaluation
@@ -49,7 +48,7 @@ export default function PaymentRequestScreen({ navigation, route }) {
 
       // Evaluate payment request with AI
       const evaluation = await paymentRequestService.evaluate(
-        userId,
+        USER_ID,
         amountValue,
         payeeName.trim(),
         reason.trim()
@@ -83,7 +82,7 @@ export default function PaymentRequestScreen({ navigation, route }) {
       } else if (evaluation.requires_conversation) {
         // Requires conversation
         navigation.navigate('Conversation', {
-          userId,
+          userId: USER_ID,
           paymentRequestId: evaluation.payment_request_id,
           conversationType: 'payment_request',
           initialMessage: evaluation.conversation_starter,

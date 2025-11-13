@@ -3,11 +3,13 @@
  *
  * Receives TRANSACTION_CREATED webhook events from Up Bank
  * Validates signature, checks whitelist, logs transaction
+ * Detects irregular deposits and triggers AI interrogation
  * Critical component for real-time financial intervention
  */
 
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
+const { USER_ID } = require('../config/constants');
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -108,6 +110,165 @@ async function sendAlert(transaction) {
 }
 
 /**
+ * Check if transaction is a deposit (positive amount)
+ */
+function isDeposit(transaction) {
+  const amount = parseFloat(transaction.attributes.amount.value);
+  return amount > 0;
+}
+
+/**
+ * Check if deposit matches predatory lender patterns
+ */
+async function isPredatoryLender(description) {
+  if (!description) return null;
+
+  const { data, error } = await supabase
+    .from('predatory_lenders')
+    .select('*');
+
+  if (error) {
+    console.error('Error checking predatory lenders:', error);
+    return null;
+  }
+
+  // Check each lender's patterns
+  for (const lender of data) {
+    const patterns = lender.detection_patterns || [];
+
+    for (const pattern of patterns) {
+      const regex = new RegExp(pattern, 'i');
+      if (regex.test(description)) {
+        return lender;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Determine deposit type and whether it needs interrogation
+ */
+async function classifyDeposit(transaction) {
+  const amount = parseFloat(transaction.attributes.amount.value);
+  const description = transaction.attributes.description;
+
+  // Check if it's from a predatory lender
+  const lender = await isPredatoryLender(description);
+  if (lender) {
+    return {
+      type: 'payday_loan',
+      needs_interrogation: true,
+      risk_level: 'high',
+      reason: `Deposit from known predatory lender: ${lender.lender_name}`,
+      metadata: { lender_id: lender.id }
+    };
+  }
+
+  // Check for known income patterns
+  const knownIncomePatterns = [
+    /salary/i,
+    /wages/i,
+    /payment from.*pty.*ltd/i,
+    /payroll/i,
+    /centrelink/i,
+    /pension/i,
+    /interest/i,
+    /dividend/i
+  ];
+
+  const isKnownIncome = knownIncomePatterns.some(pattern => pattern.test(description));
+
+  if (isKnownIncome) {
+    return {
+      type: 'expected_income',
+      needs_interrogation: false,
+      risk_level: 'low',
+      reason: 'Matches known income pattern'
+    };
+  }
+
+  // Check for small amounts (likely refunds or transfers)
+  if (amount < 50) {
+    return {
+      type: 'small_deposit',
+      needs_interrogation: false,
+      risk_level: 'low',
+      reason: 'Small amount, likely refund or transfer'
+    };
+  }
+
+  // Everything else is irregular and needs questioning
+  return {
+    type: 'irregular',
+    needs_interrogation: true,
+    risk_level: 'medium',
+    reason: 'Unexpected deposit source - needs verification'
+  };
+}
+
+/**
+ * Log irregular deposit to database
+ */
+async function logIrregularDeposit(transaction, classification) {
+  const { data, error } = await supabase
+    .from('irregular_deposits')
+    .insert({
+      user_id: USER_ID,
+      transaction_id: transaction.id,
+      amount: parseFloat(transaction.attributes.amount.value),
+      source_description: transaction.attributes.description,
+      deposit_type: classification.type,
+      interrogation_status: 'pending',
+      risk_level: classification.risk_level,
+      detected_at: transaction.attributes.createdAt,
+      metadata: classification.metadata || {}
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error logging irregular deposit:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Create intervention for irregular deposit
+ * This triggers the AI interrogation conversation
+ */
+async function createDepositIntervention(transaction, irregularDeposit, classification) {
+  const { data, error } = await supabase
+    .from('interventions')
+    .insert({
+      user_id: USER_ID,
+      transaction_id: transaction.id,
+      trigger_type: 'irregular_deposit',
+      trigger_reason: classification.reason,
+      severity: classification.risk_level === 'high' ? 'high' : 'medium',
+      status: 'pending',
+      metadata: {
+        deposit_type: classification.type,
+        amount: transaction.attributes.amount.value,
+        description: transaction.attributes.description,
+        irregular_deposit_id: irregularDeposit.id
+      }
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating deposit intervention:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+/**
  * Main webhook handler
  */
 export default async function handler(req, res) {
@@ -167,15 +328,44 @@ export default async function handler(req, res) {
       }
     };
 
-    // Check if payee is whitelisted
+    // Check if payee is whitelisted (for outgoing transactions)
     const payeeName = transactionData.attributes.description;
     const whitelisted = await isWhitelisted(payeeName);
 
     // Log transaction to database
     await logTransaction(transactionData, whitelisted);
 
-    // If NOT whitelisted, trigger alert
-    if (!whitelisted) {
+    // Check if this is a deposit (incoming money)
+    const isIncomingDeposit = isDeposit(transactionData);
+    let depositClassification = null;
+    let irregularDeposit = null;
+
+    if (isIncomingDeposit) {
+      // Classify the deposit
+      depositClassification = await classifyDeposit(transactionData);
+      console.log('Deposit detected:', {
+        amount: transactionData.attributes.amount.value,
+        type: depositClassification.type,
+        needs_interrogation: depositClassification.needs_interrogation,
+        risk_level: depositClassification.risk_level
+      });
+
+      // If deposit needs interrogation, log it and create intervention
+      if (depositClassification.needs_interrogation) {
+        irregularDeposit = await logIrregularDeposit(transactionData, depositClassification);
+        await createDepositIntervention(transactionData, irregularDeposit, depositClassification);
+
+        console.log('ALERT: Irregular deposit detected - interrogation required', {
+          amount: transactionData.attributes.amount.value,
+          description: transactionData.attributes.description,
+          type: depositClassification.type,
+          risk_level: depositClassification.risk_level
+        });
+      }
+    }
+
+    // If NOT whitelisted (outgoing transaction), trigger alert
+    if (!whitelisted && !isIncomingDeposit) {
       await sendAlert(transactionData);
     }
 
@@ -183,7 +373,13 @@ export default async function handler(req, res) {
     return res.status(200).json({
       message: 'Webhook processed',
       whitelisted,
-      transactionId
+      transactionId,
+      isDeposit: isIncomingDeposit,
+      depositClassification: depositClassification ? {
+        type: depositClassification.type,
+        needs_interrogation: depositClassification.needs_interrogation,
+        risk_level: depositClassification.risk_level
+      } : null
     });
 
   } catch (error) {

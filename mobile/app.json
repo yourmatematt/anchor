@@ -54,9 +54,9 @@
       "eas": {
         "projectId": "your-project-id-here"
       },
-      "EXPO_PUBLIC_SUPABASE_URL": "",
-      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "",
-      "EXPO_PUBLIC_API_BASE_URL": ""
+      "EXPO_PUBLIC_SUPABASE_URL": "https://YOUR_PROJECT_ID.supabase.co",
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "YOUR_SUPABASE_ANON_KEY_HERE",
+      "EXPO_PUBLIC_API_BASE_URL": "https://anchor.vercel.app"
     }
   }
 }

@@ -13,6 +13,9 @@ import { Alert, View, Text, StyleSheet } from 'react-native';
 import HomeScreen from './screens/HomeScreen';
 import AlertScreen from './screens/AlertScreen';
 import WhitelistScreen from './screens/WhitelistScreen';
+import OnboardingScreen from './screens/OnboardingScreen';
+import PaymentRequestScreen from './screens/PaymentRequestScreen';
+import ConversationScreen from './screens/ConversationScreen';
 
 // Services
 import { registerForPushNotifications, addNotificationResponseListener } from './services/notifications';
@@ -94,6 +97,26 @@ export default function App() {
             }}
           />
           <Stack.Screen name="Whitelist" component={WhitelistScreen} />
+          <Stack.Screen
+            name="Onboarding"
+            component={OnboardingScreen}
+            options={{
+              presentation: 'fullScreenModal',
+              gestureEnabled: false
+            }}
+          />
+          <Stack.Screen
+            name="PaymentRequest"
+            component={PaymentRequestScreen}
+          />
+          <Stack.Screen
+            name="Conversation"
+            component={ConversationScreen}
+            options={{
+              presentation: 'fullScreenModal',
+              gestureEnabled: false
+            }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </>

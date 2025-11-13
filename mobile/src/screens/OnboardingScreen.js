@@ -24,6 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { onboardingService } from '../services/ai';
 import { transactionService as upTransactionService } from '../services/upBank';
 import voiceService from '../services/voice';
+import { USER_ID } from '../constants';
 
 const STAGES = {
   WELCOME: 'welcome',
@@ -43,8 +44,6 @@ export default function OnboardingScreen({ navigation, route }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [profile, setProfile] = useState(null);
   const [analysis, setAnalysis] = useState(null);
-
-  const userId = route.params?.userId || 'temp-user-id'; // TODO: Get from auth
 
   useEffect(() => {
     return () => {
@@ -73,7 +72,7 @@ export default function OnboardingScreen({ navigation, route }) {
       }
 
       // Start AI onboarding
-      const response = await onboardingService.start(userId, transactions);
+      const response = await onboardingService.start(USER_ID, transactions);
 
       setConversationId(response.conversation_id);
       setAnalysis(response.analysis);
@@ -147,7 +146,7 @@ export default function OnboardingScreen({ navigation, route }) {
 
       // Send to AI
       const response = await onboardingService.continueConversation(
-        userId,
+        USER_ID,
         conversationId,
         userMessage.content
       );

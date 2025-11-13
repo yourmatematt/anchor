@@ -150,7 +150,7 @@ export default async function handler(req, res) {
     // Detect if conversation should end
     // Look for approval/denial keywords or user confirmation
     const shouldEnd = detectConversationEnd(aiResponse, user_message, conversation.conversation_type);
-    const outcome = determineOutcome(conversationHistory, shouldEnd);
+    const outcome = determineOutcome(conversationHistory, shouldEnd, conversation.conversation_type);
 
     // Update conversation in database
     await supabase
@@ -194,6 +194,30 @@ export default async function handler(req, res) {
           conversation_id: conversation.id
         })
         .eq('id', context.intervention_id);
+    }
+
+    // Update irregular deposit if this was a deposit interrogation
+    if (conversation.conversation_type === 'deposit_interrogation' && context?.irregular_deposit_id) {
+      await supabase
+        .from('irregular_deposits')
+        .update({
+          interrogation_status: shouldEnd ? 'completed' : 'in_progress',
+          user_explanation: user_message,
+          ai_assessment: shouldEnd ? outcome : null,
+          conversation_id: conversation.id,
+          completed_at: shouldEnd ? new Date().toISOString() : null
+        })
+        .eq('id', context.irregular_deposit_id);
+
+      // If outcome is high_risk, update user's clean_since_date (reset the counter)
+      if (shouldEnd && outcome === 'high_risk') {
+        await supabase
+          .from('user_profiles')
+          .update({
+            clean_since_date: new Date().toISOString()
+          })
+          .eq('user_id', user_id);
+      }
     }
 
     return res.status(200).json({
@@ -244,6 +268,16 @@ function detectConversationEnd(aiResponse, userMessage, conversationType) {
     return true;
   }
 
+  // Check for deposit interrogation completion
+  if (conversationType === 'deposit_interrogation' &&
+      (aiLower.includes("alright") ||
+       aiLower.includes("got it") ||
+       aiLower.includes("fair enough") ||
+       aiLower.includes("keep me posted") ||
+       aiLower.includes("we'll talk about this"))) {
+    return true;
+  }
+
   // Check if user gives up
   if (userLower.includes("forget it") ||
       userLower.includes("never mind") ||
@@ -257,7 +291,7 @@ function detectConversationEnd(aiResponse, userMessage, conversationType) {
 /**
  * Determine the outcome of the conversation
  */
-function determineOutcome(conversationHistory, hasEnded) {
+function determineOutcome(conversationHistory, hasEnded, conversationType) {
   if (!hasEnded) {
     return null;
   }
@@ -272,6 +306,36 @@ function determineOutcome(conversationHistory, hasEnded) {
 
   const content = lastAssistantMessage.content.toLowerCase();
 
+  // Deposit interrogation outcomes
+  if (conversationType === 'deposit_interrogation') {
+    if (content.includes('payday loan') ||
+        content.includes('borrowing to gamble') ||
+        content.includes('debt trap')) {
+      return 'high_risk';
+    }
+
+    if (content.includes('irregular') ||
+        content.includes('keep an eye') ||
+        content.includes('track this')) {
+      return 'concerning';
+    }
+
+    if (content.includes('legitimate') ||
+        content.includes('fair enough') ||
+        content.includes('alright')) {
+      return 'legitimate';
+    }
+
+    if (content.includes('lying') ||
+        content.includes('deflecting') ||
+        content.includes('not buying it')) {
+      return 'intervention_needed';
+    }
+
+    return 'completed';
+  }
+
+  // Payment request outcomes
   if (content.includes('approved') ||
       content.includes('go ahead') ||
       content.includes('you can send')) {
@@ -284,6 +348,7 @@ function determineOutcome(conversationHistory, hasEnded) {
     return 'denied';
   }
 
+  // Check-in outcomes
   if (content.includes('stay strong') ||
       content.includes('good chat')) {
     return 'completed';

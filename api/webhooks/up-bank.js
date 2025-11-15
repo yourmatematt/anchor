@@ -16,6 +16,7 @@ const {
   notifyNonWhitelistedTransaction
 } = require('../services/notifications');
 const { notifyGuardian } = require('../services/guardian');
+const { detectRelapse, isGamblingMerchant } = require('../services/relapse');
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -469,6 +470,13 @@ export default async function handler(req, res) {
               apr: '300-400%'
             }
           });
+
+          // Detect relapse (payday loan = borrowing to gamble)
+          await detectRelapse(USER_ID, 'payday_loan', {
+            amount: transactionData.attributes.amount.value,
+            lender: transactionData.attributes.description,
+            transaction_id: transactionData.id
+          });
         } else {
           // Other irregular deposit
           await notifyGuardian(USER_ID, {
@@ -514,6 +522,9 @@ export default async function handler(req, res) {
     if (!whitelisted && !isIncomingDeposit && !instructionCompleted) {
       await sendAlert(transactionData);
 
+      // Check if this is a gambling merchant
+      const isGambling = isGamblingMerchant(transactionData.attributes.description);
+
       // Notify guardian of potential gambling trigger
       await notifyGuardian(USER_ID, {
         type: 'gambling_trigger',
@@ -521,9 +532,18 @@ export default async function handler(req, res) {
           amount: Math.abs(parseFloat(transactionData.attributes.amount.value)),
           payee: transactionData.attributes.description,
           blocked: false, // Transaction already happened
-          pattern_matched: 'Non-whitelisted merchant'
+          pattern_matched: isGambling ? 'Known gambling merchant' : 'Non-whitelisted merchant'
         }
       });
+
+      // If confirmed gambling merchant, detect relapse
+      if (isGambling) {
+        await detectRelapse(USER_ID, 'gambling_transaction', {
+          amount: Math.abs(parseFloat(transactionData.attributes.amount.value)),
+          merchant: transactionData.attributes.description,
+          transaction_id: transactionData.id
+        });
+      }
     }
 
     // Respond with 200 OK (Up Bank requires this)

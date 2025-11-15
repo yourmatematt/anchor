@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/check-bills",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/check-milestones",
+      "schedule": "0 8 * * *"
     }
   ],
   "env": {

@@ -1,11 +1,16 @@
 /**
- * Home Screen
+ * Home Screen - Daily Dashboard
  *
- * Main dashboard showing:
- * - Current account balance
- * - Today's transactions
- * - Whitelist status indicator
- * - Pending interventions badge
+ * Shows:
+ * - Days clean (LARGEST element - primary metric)
+ * - Guardian status (always visible - can't forget they're watching)
+ * - Allowance card (current state, Request Money button)
+ * - Vault summary (locked, growing = good)
+ * - Recent activity
+ * - Upcoming bills
+ *
+ * NO cute greetings, NO "How are you feeling?" prompts
+ * Dark mode, high contrast, instantly readable
  */
 
 import React, { useState, useEffect } from 'react';
@@ -17,54 +22,63 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  Alert
+  Alert,
+  SafeAreaView,
+  StatusBar,
 } from 'react-native';
-import { accountService, transactionService as upTransactionService } from '../services/upBank';
-import { transactionService, realtimeService } from '../services/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors, Typography, Spacing, Components, BorderRadius } from '../theme';
+
+// Mock data for MVP - in production, these would come from Supabase
+const MOCK_USER = {
+  daysClean: 47,
+  dailyAllowance: 30.00,
+  allowanceRemaining: 23.50,
+  vaultBalance: 2150.00,
+  vaultGrowth: 2150.00,
+  guardian: {
+    name: 'Gutsy',
+    isActive: true,
+  },
+};
+
+const MOCK_RECENT_ACTIVITY = [
+  { id: 1, type: 'payment', payee: 'Easygo payment', amount: -626.22, daysAgo: 2, status: 'approved' },
+  { id: 2, type: 'payment', payee: 'Foodworks', amount: -45.30, daysAgo: 3, status: 'approved' },
+  { id: 3, type: 'request', reason: 'Cash request', amount: 50, daysAgo: 5, status: 'denied' },
+];
+
+const MOCK_UPCOMING_BILLS = [
+  { id: 1, payee: 'Easygo', amount: 626.22, dueDate: 'Tomorrow' },
+  { id: 2, payee: 'Rent', amount: 440.00, dueDate: '3 days' },
+];
 
 export default function HomeScreen({ navigation }) {
-  const [balance, setBalance] = useState(null);
-  const [todayTransactions, setTodayTransactions] = useState([]);
-  const [pendingInterventions, setPendingInterventions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [userData, setUserData] = useState(MOCK_USER);
+  const [recentActivity, setRecentActivity] = useState(MOCK_RECENT_ACTIVITY);
+  const [upcomingBills, setUpcomingBills] = useState(MOCK_UPCOMING_BILLS);
 
   useEffect(() => {
     loadData();
-    setupRealtimeSubscription();
-
-    return () => {
-      // Cleanup subscription on unmount
-    };
   }, []);
 
   async function loadData() {
     try {
-      setLoading(true);
+      // In production, load from Supabase:
+      // - User data (days clean, allowance, vault balance)
+      // - Recent transactions/requests
+      // - Upcoming bills
+      // - Guardian status
 
-      // Load balance
-      const totalBalance = await accountService.getTotalBalance();
-      setBalance(totalBalance);
-
-      // Load today's transactions
-      const { transactions } = await upTransactionService.getTodayTransactions();
-      setTodayTransactions(transactions);
-
-      // Load pending interventions
-      const pending = await transactionService.getPendingInterventions();
-      setPendingInterventions(pending);
-
-      // If there are pending interventions, navigate to alert screen
-      if (pending.length > 0) {
-        navigation.navigate('Alert', { transaction: pending[0] });
-      }
-
+      // For now, using mock data
+      setUserData(MOCK_USER);
+      setRecentActivity(MOCK_RECENT_ACTIVITY);
+      setUpcomingBills(MOCK_UPCOMING_BILLS);
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load data. Please check your connection.');
-    } finally {
-      setLoading(false);
+      Alert.alert('Error', 'Failed to load data. Pull to refresh.');
     }
   }
 
@@ -74,277 +88,435 @@ export default function HomeScreen({ navigation }) {
     setRefreshing(false);
   }
 
-  function setupRealtimeSubscription() {
-    // Subscribe to new transactions
-    const channel = realtimeService.subscribeToTransactions((payload) => {
-      console.log('New transaction:', payload);
-      const newTransaction = payload.new;
+  const handleRequestMoney = () => {
+    navigation.navigate('PaymentRequest');
+  };
 
-      // If transaction is not whitelisted, navigate to alert
-      if (!newTransaction.is_whitelisted) {
-        navigation.navigate('Alert', { transaction: newTransaction });
-      }
+  const handleViewAllActivity = () => {
+    // Navigate to full transaction history
+    console.log('View all activity');
+  };
 
-      // Refresh data
-      loadData();
-    });
-  }
+  const handleViewAllBills = () => {
+    navigation.navigate('Bills');
+  };
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading...</Text>
+        <ActivityIndicator size="large" color={Colors.accent} />
       </View>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Anchor</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Whitelist')}>
-          <Ionicons name="settings-outline" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
-      {/* Pending Interventions Alert */}
-      {pendingInterventions.length > 0 && (
-        <TouchableOpacity
-          style={styles.alertBanner}
-          onPress={() => navigation.navigate('Alert', { transaction: pendingInterventions[0] })}
-        >
-          <Ionicons name="warning" size={24} color="#fff" />
-          <View style={styles.alertBannerText}>
-            <Text style={styles.alertBannerTitle}>
-              {pendingInterventions.length} Pending Transaction{pendingInterventions.length > 1 ? 's' : ''}
-            </Text>
-            <Text style={styles.alertBannerSubtitle}>
-              Tap to complete voice memo
-            </Text>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.textSecondary}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Top Section: Header + Days Clean + Guardian */}
+        <View style={styles.topSection}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>ANCHOR</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+              <Ionicons name="person-circle-outline" size={32} color={Colors.textPrimary} />
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      )}
 
-      {/* Balance Card */}
-      <View style={styles.balanceCard}>
-        <Text style={styles.balanceLabel}>Total Balance</Text>
-        <Text style={styles.balanceAmount}>
-          ${balance ? parseFloat(balance).toFixed(2) : '0.00'}
-        </Text>
-        <View style={styles.balanceStatus}>
-          <View style={[styles.statusDot, { backgroundColor: '#34c759' }]} />
-          <Text style={styles.statusText}>Protected by Anchor</Text>
+          {/* Days Clean - LARGEST ELEMENT (primary metric) */}
+          <View style={styles.daysCleanContainer}>
+            <Text style={styles.daysCleanNumber}>{userData.daysClean}</Text>
+            <Text style={styles.daysCleanLabel}>DAYS CLEAN</Text>
+          </View>
+
+          {/* Guardian Status - Always Visible */}
+          <TouchableOpacity
+            style={styles.guardianStatus}
+            onPress={() => navigation.navigate('Profile')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.guardianText}>
+              Guardian: <Text style={styles.guardianName}>{userData.guardian.name}</Text> ✓ Watching
+            </Text>
+          </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Today's Transactions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Today's Transactions</Text>
+        {/* Allowance Card */}
+        <View style={styles.allowanceCard}>
+          <Text style={styles.cardTitle}>TODAY'S ALLOWANCE</Text>
 
-        {todayTransactions.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="checkmark-circle-outline" size={48} color="#34c759" />
-            <Text style={styles.emptyStateText}>No transactions today</Text>
+          <Text style={styles.allowanceAmount}>
+            ${userData.allowanceRemaining.toFixed(2)} <Text style={styles.allowanceTotal}>of ${userData.dailyAllowance.toFixed(0)}</Text>
+          </Text>
+
+          {/* Progress bar */}
+          <View style={styles.progressBar}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${(userData.allowanceRemaining / userData.dailyAllowance) * 100}%`,
+                  backgroundColor: userData.allowanceRemaining > 10 ? Colors.success : Colors.warning,
+                }
+              ]}
+            />
           </View>
-        ) : (
-          todayTransactions.map((tx) => (
-            <View key={tx.id} style={styles.transactionCard}>
-              <View style={styles.transactionIcon}>
-                <Ionicons
-                  name={parseFloat(tx.amount.value) < 0 ? 'arrow-up' : 'arrow-down'}
-                  size={20}
-                  color={parseFloat(tx.amount.value) < 0 ? '#ff3b30' : '#34c759'}
-                />
-              </View>
-              <View style={styles.transactionDetails}>
-                <Text style={styles.transactionDescription}>{tx.description}</Text>
-                <Text style={styles.transactionTime}>
-                  {new Date(tx.createdAt).toLocaleTimeString()}
-                </Text>
-              </View>
-              <Text
-                style={[
-                  styles.transactionAmount,
-                  { color: parseFloat(tx.amount.value) < 0 ? '#ff3b30' : '#34c759' }
-                ]}
-              >
-                ${Math.abs(parseFloat(tx.amount.value)).toFixed(2)}
-              </Text>
-            </View>
-          ))
-        )}
-      </View>
 
-      {/* Quick Actions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('Whitelist')}
-        >
-          <Ionicons name="shield-checkmark" size={24} color="#007AFF" />
-          <Text style={styles.actionButtonText}>Manage Whitelist</Text>
-          <Ionicons name="chevron-forward" size={20} color="#8e8e93" />
+          <Text style={styles.allowanceReset}>Resets at midnight</Text>
+
+          <TouchableOpacity
+            style={styles.requestButton}
+            onPress={handleRequestMoney}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.requestButtonText}>Request More Money</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Vault Summary */}
+        <View style={styles.vaultCard}>
+          <View style={styles.vaultHeader}>
+            <Text style={styles.cardTitle}>VAULT (Locked)</Text>
+            <Ionicons name="lock-closed" size={18} color={Colors.textSecondary} />
+          </View>
+
+          <Text style={styles.vaultAmount}>${userData.vaultBalance.toFixed(2)}</Text>
+
+          <Text style={styles.vaultGrowth}>
+            Since clean: <Text style={styles.vaultGrowthAmount}>+${userData.vaultGrowth.toFixed(0)}</Text>
+          </Text>
+        </View>
+
+        {/* Recent Activity */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>RECENT</Text>
+
+          {recentActivity.map(item => (
+            <View key={item.id} style={styles.activityItem}>
+              <View style={styles.activityLeft}>
+                {item.status === 'approved' && <Text style={styles.activityIcon}>✓</Text>}
+                {item.status === 'denied' && <Text style={styles.activityIconDenied}>⚠</Text>}
+                <Text style={styles.activityDescription}>{item.payee || item.reason}</Text>
+              </View>
+              <View style={styles.activityRight}>
+                <Text style={[
+                  styles.activityAmount,
+                  item.status === 'denied' && styles.activityAmountDenied
+                ]}>
+                  {item.status === 'denied' ? `$${item.amount}` : `-$${Math.abs(item.amount).toFixed(2)}`}
+                </Text>
+                <Text style={styles.activityDate}>({item.daysAgo}d)</Text>
+              </View>
+            </View>
+          ))}
+
+          <TouchableOpacity style={styles.viewAllButton} onPress={handleViewAllActivity}>
+            <Text style={styles.viewAllText}>View All</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Upcoming Bills */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>BILLS DUE SOON</Text>
+
+          {upcomingBills.map(bill => (
+            <View key={bill.id} style={styles.billItem}>
+              <View>
+                <Text style={styles.billPayee}>{bill.payee} - ${bill.amount.toFixed(2)}</Text>
+                <Text style={styles.billDue}>({bill.dueDate})</Text>
+              </View>
+            </View>
+          ))}
+
+          <TouchableOpacity style={styles.viewAllButton} onPress={handleViewAllBills}>
+            <Text style={styles.viewAllText}>View All Bills</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Bottom spacing for tab bar */}
+        <View style={{ height: 100 }} />
+      </ScrollView>
+
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNav}>
+        <TouchableOpacity style={styles.navButton} onPress={() => {}}>
+          <Ionicons name="home" size={24} color={Colors.accent} />
+          <Text style={[styles.navLabel, styles.navLabelActive]}>Home</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Bills')}>
+          <Ionicons name="receipt-outline" size={24} color={Colors.textSecondary} />
+          <Text style={styles.navLabel}>Bills</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Progress')}>
+          <Ionicons name="trending-up-outline" size={24} color={Colors.textSecondary} />
+          <Text style={styles.navLabel}>Progress</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Profile')}>
+          <Ionicons name="person-outline" size={24} color={Colors.textSecondary} />
+          <Text style={styles.navLabel}>Profile</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: Colors.background,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loadingText: {
-    color: '#fff',
-    marginTop: 12,
-    fontSize: 16,
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    paddingBottom: Spacing.xl,
+  },
+
+  // Top Section
+  topSection: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xl,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
+    marginBottom: Spacing.xl,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
+    ...Typography.h2,
+    letterSpacing: 2,
   },
-  alertBanner: {
-    backgroundColor: '#ff3b30',
-    flexDirection: 'row',
+
+  // Days Clean - LARGEST ELEMENT
+  daysCleanContainer: {
     alignItems: 'center',
-    padding: 16,
-    marginHorizontal: 20,
-    marginBottom: 20,
-    borderRadius: 12,
+    marginBottom: Spacing.lg,
   },
-  alertBannerText: {
-    marginLeft: 12,
-    flex: 1,
+  daysCleanNumber: {
+    ...Typography.numberLarge,
+    fontSize: 72,
+    lineHeight: 80,
+    marginBottom: Spacing.sm,
   },
-  alertBannerTitle: {
-    color: '#fff',
-    fontSize: 16,
+  daysCleanLabel: {
+    ...Typography.h3,
+    color: Colors.textSecondary,
+    letterSpacing: 3,
+  },
+
+  // Guardian Status
+  guardianStatus: {
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+  },
+  guardianText: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+  },
+  guardianName: {
+    color: Colors.guardian,
     fontWeight: '600',
   },
-  alertBannerSubtitle: {
-    color: '#fff',
+
+  // Allowance Card
+  allowanceCard: {
+    ...Components.card,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.lg,
+  },
+  cardTitle: {
+    ...Typography.h4,
     fontSize: 14,
-    opacity: 0.9,
+    color: Colors.textSecondary,
+    letterSpacing: 1,
+    marginBottom: Spacing.md,
   },
-  balanceCard: {
-    backgroundColor: '#1c1c1e',
-    marginHorizontal: 20,
-    marginBottom: 24,
-    padding: 24,
-    borderRadius: 16,
+  allowanceAmount: {
+    ...Typography.numberMedium,
+    fontSize: 40,
+    marginBottom: Spacing.sm,
   },
-  balanceLabel: {
-    color: '#8e8e93',
-    fontSize: 14,
-    marginBottom: 8,
+  allowanceTotal: {
+    fontSize: 24,
+    color: Colors.textSecondary,
   },
-  balanceAmount: {
-    color: '#fff',
-    fontSize: 48,
-    fontWeight: 'bold',
-    marginBottom: 12,
+  progressBar: {
+    height: 8,
+    backgroundColor: Colors.backgroundModal,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: Spacing.sm,
   },
-  balanceStatus: {
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  allowanceReset: {
+    ...Typography.small,
+    color: Colors.textTertiary,
+    marginBottom: Spacing.lg,
+  },
+  requestButton: {
+    ...Components.buttonPrimary,
+    paddingVertical: 14,
+  },
+  requestButtonText: {
+    ...Typography.button,
+  },
+
+  // Vault Card
+  vaultCard: {
+    ...Components.card,
+    marginHorizontal: Spacing.lg,
+    backgroundColor: Colors.backgroundModal,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  vaultHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
+  vaultAmount: {
+    ...Typography.numberMedium,
+    fontSize: 36,
+    marginBottom: Spacing.sm,
   },
-  statusText: {
-    color: '#8e8e93',
-    fontSize: 14,
+  vaultGrowth: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
   },
+  vaultGrowthAmount: {
+    color: Colors.success,
+    fontWeight: '600',
+  },
+
+  // Sections
   section: {
-    marginHorizontal: 20,
-    marginBottom: 24,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.xl,
   },
   sectionTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 16,
+    ...Typography.h4,
+    fontSize: 14,
+    color: Colors.textSecondary,
+    letterSpacing: 1,
+    marginBottom: Spacing.md,
   },
-  emptyState: {
+
+  // Activity Items
+  activityItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 40,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  emptyStateText: {
-    color: '#8e8e93',
-    fontSize: 16,
-    marginTop: 12,
-  },
-  transactionCard: {
+  activityLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1c1c1e',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  transactionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#2c2c2e',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  transactionDetails: {
     flex: 1,
   },
-  transactionDescription: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
+  activityIcon: {
+    ...Typography.body,
+    color: Colors.success,
+    marginRight: Spacing.sm,
+  },
+  activityIconDenied: {
+    ...Typography.body,
+    color: Colors.warning,
+    marginRight: Spacing.sm,
+  },
+  activityDescription: {
+    ...Typography.body,
+  },
+  activityRight: {
+    alignItems: 'flex-end',
+  },
+  activityAmount: {
+    ...Typography.body,
+    fontWeight: '600',
+  },
+  activityAmountDenied: {
+    color: Colors.warning,
+  },
+  activityDate: {
+    ...Typography.small,
+    color: Colors.textTertiary,
+  },
+
+  // Bill Items
+  billItem: {
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  billPayee: {
+    ...Typography.body,
     marginBottom: 4,
   },
-  transactionTime: {
-    color: '#8e8e93',
-    fontSize: 14,
+  billDue: {
+    ...Typography.small,
+    color: Colors.textSecondary,
   },
-  transactionAmount: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  actionButton: {
-    flexDirection: 'row',
+
+  // View All Button
+  viewAllButton: {
+    paddingVertical: Spacing.md,
     alignItems: 'center',
-    backgroundColor: '#1c1c1e',
-    padding: 16,
-    borderRadius: 12,
   },
-  actionButtonText: {
+  viewAllText: {
+    ...Typography.buttonSmall,
+    color: Colors.accent,
+  },
+
+  // Bottom Navigation
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: Colors.backgroundCard,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingBottom: Spacing.md,
+    paddingTop: Spacing.sm,
+  },
+  navButton: {
     flex: 1,
-    color: '#fff',
-    fontSize: 16,
-    marginLeft: 12,
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+  },
+  navLabel: {
+    ...Typography.small,
+    fontSize: 11,
+    marginTop: 4,
+    color: Colors.textSecondary,
+  },
+  navLabelActive: {
+    color: Colors.accent,
   },
 });

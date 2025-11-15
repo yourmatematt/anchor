@@ -458,6 +458,64 @@ CREATE TABLE IF NOT EXISTS scallys_income_events (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Guardian system
+-- Tracks accountability partners who receive notifications about user activity
+CREATE TABLE IF NOT EXISTS guardians (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID,
+
+  -- Guardian details
+  guardian_name TEXT NOT NULL,
+  guardian_phone TEXT,
+  guardian_email TEXT,
+  relationship TEXT, -- 'friend', 'family', 'sponsor', 'other'
+
+  -- Notification preferences
+  notify_on_payment_requests BOOLEAN DEFAULT true,
+  notify_on_declined_requests BOOLEAN DEFAULT true,
+  notify_on_gambling_triggers BOOLEAN DEFAULT true,
+  notify_on_payday_loans BOOLEAN DEFAULT true,
+  notify_on_relapse BOOLEAN DEFAULT true,
+  notify_on_clean_milestones BOOLEAN DEFAULT true,
+
+  -- Commitment tracking
+  active BOOLEAN DEFAULT true,
+  commitment_start_date DATE NOT NULL,
+  commitment_end_date DATE NOT NULL,
+  invite_sent_at TIMESTAMP,
+  invite_accepted_at TIMESTAMP,
+  invite_status TEXT DEFAULT 'pending', -- 'pending', 'accepted', 'declined'
+
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Guardian notifications log
+-- Tracks all notifications sent to guardians
+CREATE TABLE IF NOT EXISTS guardian_notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  guardian_id UUID REFERENCES guardians(id),
+  user_id UUID,
+
+  -- Event details
+  event_type TEXT NOT NULL, -- 'payment_request', 'payment_approved', 'payment_denied', etc.
+  event_data JSONB,
+
+  -- Message details
+  message_title TEXT,
+  message_body TEXT,
+
+  -- Delivery
+  sent_via_sms BOOLEAN DEFAULT false,
+  sent_via_email BOOLEAN DEFAULT false,
+  sms_sent_at TIMESTAMP,
+  email_sent_at TIMESTAMP,
+  sms_status TEXT, -- 'sent', 'delivered', 'failed'
+  email_status TEXT, -- 'sent', 'delivered', 'failed'
+
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- =====================================================
 -- PART 4: INDEXES
 -- =====================================================
@@ -494,6 +552,12 @@ CREATE INDEX IF NOT EXISTS idx_bill_reminders_unpaid ON bill_reminders(user_id, 
 CREATE INDEX IF NOT EXISTS idx_debt_acceleration_user ON debt_acceleration_opportunities(user_id);
 CREATE INDEX IF NOT EXISTS idx_budget_surplus_user_month ON budget_surplus_events(user_id, month_year);
 CREATE INDEX IF NOT EXISTS idx_scallys_income_user ON scallys_income_events(user_id, deposit_date DESC);
+
+-- Guardian indexes
+CREATE INDEX IF NOT EXISTS idx_guardians_user_active ON guardians(user_id) WHERE active = true;
+CREATE INDEX IF NOT EXISTS idx_guardians_commitment ON guardians(commitment_end_date) WHERE active = true;
+CREATE INDEX IF NOT EXISTS idx_guardian_notifications_guardian ON guardian_notifications(guardian_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_guardian_notifications_event ON guardian_notifications(event_type, created_at DESC);
 
 -- =====================================================
 -- PART 5: FUNCTIONS & TRIGGERS
@@ -604,6 +668,8 @@ ALTER TABLE bill_reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE debt_acceleration_opportunities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE budget_surplus_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scallys_income_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE guardians ENABLE ROW LEVEL SECURITY;
+ALTER TABLE guardian_notifications ENABLE ROW LEVEL SECURITY;
 
 -- For MVP (single user), allow all operations
 -- In production, add proper user authentication policies
@@ -624,7 +690,7 @@ BEGIN
             'reminders', 'budget_categories', 'budget_surplus',
             'manual_payment_instructions', 'bill_reminders',
             'debt_acceleration_opportunities', 'budget_surplus_events',
-            'scallys_income_events'
+            'scallys_income_events', 'guardians', 'guardian_notifications'
           )
     LOOP
         EXECUTE format('DROP POLICY IF EXISTS "Allow all operations on %I" ON %I', tbl_name, tbl_name);

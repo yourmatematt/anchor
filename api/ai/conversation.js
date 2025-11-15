@@ -7,6 +7,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { getAIResponse } = require('../services/claude');
+const { notifyGuardian } = require('../services/guardian');
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -163,25 +164,53 @@ export default async function handler(req, res) {
 
     // If payment request conversation ended with approval, update payment request
     if (shouldEnd && outcome === 'approved' && context?.payment_request_id) {
-      await supabase
+      const { data: paymentRequest } = await supabase
         .from('payment_requests')
         .update({
           decision: 'approved',
           approved_at: new Date().toISOString(),
           conversation_id: conversation.id
         })
-        .eq('id', context.payment_request_id);
+        .eq('id', context.payment_request_id)
+        .select()
+        .single();
+
+      // Notify guardian of approval
+      if (paymentRequest) {
+        await notifyGuardian(user_id, {
+          type: 'payment_approved',
+          data: {
+            amount: paymentRequest.amount,
+            reason: paymentRequest.reason_given,
+            classification: 'Approved after conversation'
+          }
+        });
+      }
     }
 
     // If payment request conversation ended with denial, update payment request
     if (shouldEnd && outcome === 'denied' && context?.payment_request_id) {
-      await supabase
+      const { data: paymentRequest } = await supabase
         .from('payment_requests')
         .update({
           decision: 'denied',
           conversation_id: conversation.id
         })
-        .eq('id', context.payment_request_id);
+        .eq('id', context.payment_request_id)
+        .select()
+        .single();
+
+      // Notify guardian of denial
+      if (paymentRequest) {
+        await notifyGuardian(user_id, {
+          type: 'payment_denied',
+          data: {
+            amount: paymentRequest.amount,
+            reason: paymentRequest.reason_given,
+            denial_reason: paymentRequest.decision_reason || 'High risk pattern detected'
+          }
+        });
+      }
     }
 
     // Update intervention if this was an intervention conversation

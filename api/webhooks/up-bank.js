@@ -15,6 +15,7 @@ const {
   notifyIrregularDeposit,
   notifyNonWhitelistedTransaction
 } = require('../services/notifications');
+const { notifyGuardian } = require('../services/guardian');
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -455,6 +456,30 @@ export default async function handler(req, res) {
 
         // Send push notification
         await notifyIrregularDeposit(USER_ID, irregularDeposit);
+
+        // Notify guardian
+        if (depositClassification.type === 'payday_loan') {
+          // Payday loan detected - critical alert
+          await notifyGuardian(USER_ID, {
+            type: 'payday_loan',
+            data: {
+              amount: transactionData.attributes.amount.value,
+              lender: transactionData.attributes.description,
+              estimated_repayment: parseFloat(transactionData.attributes.amount.value) * 1.15, // Estimate 15% fee
+              apr: '300-400%'
+            }
+          });
+        } else {
+          // Other irregular deposit
+          await notifyGuardian(USER_ID, {
+            type: 'irregular_deposit',
+            data: {
+              amount: transactionData.attributes.amount.value,
+              source: transactionData.attributes.description,
+              risk_level: depositClassification.risk_level
+            }
+          });
+        }
       }
     }
 
@@ -474,11 +499,31 @@ export default async function handler(req, res) {
 
       // Send push notification confirming completion
       await notifyPaymentCompleted(USER_ID, matchedInstruction);
+
+      // Notify guardian of completion
+      await notifyGuardian(USER_ID, {
+        type: 'payment_completed',
+        data: {
+          amount: matchedInstruction.approved_amount,
+          purpose: matchedInstruction.purpose
+        }
+      });
     }
 
     // If NOT whitelisted (outgoing transaction) and NOT a manual instruction completion, trigger alert
     if (!whitelisted && !isIncomingDeposit && !instructionCompleted) {
       await sendAlert(transactionData);
+
+      // Notify guardian of potential gambling trigger
+      await notifyGuardian(USER_ID, {
+        type: 'gambling_trigger',
+        data: {
+          amount: Math.abs(parseFloat(transactionData.attributes.amount.value)),
+          payee: transactionData.attributes.description,
+          blocked: false, // Transaction already happened
+          pattern_matched: 'Non-whitelisted merchant'
+        }
+      });
     }
 
     // Respond with 200 OK (Up Bank requires this)

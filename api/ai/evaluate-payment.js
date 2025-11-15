@@ -7,6 +7,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { evaluatePaymentRequest } = require('../services/claude');
+const { notifyGuardian } = require('../services/guardian');
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -101,6 +102,17 @@ export default async function handler(req, res) {
     if (logError) {
       console.error('Error logging payment request:', logError);
     }
+
+    // Notify guardian that payment request was submitted
+    await notifyGuardian(user_id, {
+      type: 'payment_request',
+      data: {
+        amount: paymentRequest.amount,
+        reason: paymentRequest.reason,
+        payee: paymentRequest.payee_name,
+        risk_score: evaluation.risk_score
+      }
+    });
 
     // Create intervention record if denied or requires conversation
     if (evaluation.decision !== 'APPROVED') {

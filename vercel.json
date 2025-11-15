@@ -16,6 +16,10 @@
     {
       "path": "/api/allowance/top-up",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/check-bills",
+      "schedule": "0 9 * * *"
     }
   ],
   "env": {
@@ -25,6 +29,10 @@
     "UP_WEBHOOK_SECRET": "@up-webhook-secret",
     "ANTHROPIC_API_KEY": "@anthropic-api-key",
     "CRON_SECRET": "@cron-secret",
-    "UP_PERSONAL_ACCESS_TOKEN": "@up-personal-access-token"
+    "UP_PERSONAL_ACCESS_TOKEN": "@up-personal-access-token",
+    "TWILIO_ACCOUNT_SID": "@twilio-account-sid",
+    "TWILIO_AUTH_TOKEN": "@twilio-auth-token",
+    "TWILIO_PHONE_NUMBER": "@twilio-phone-number",
+    "RESEND_API_KEY": "@resend-api-key"
   }
 }

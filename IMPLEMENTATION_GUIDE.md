@@ -9,7 +9,7 @@ This document provides detailed guidance for implementing the remaining screens 
 - [x] Database schema with all new tables (`supabase/schema.sql`)
 - [x] Design system with dark theme, high contrast, Australian tone
 
-### Onboarding Screens
+### Onboarding Screens (4 of 11)
 - [x] Welcome Screen (`mobile/src/screens/onboarding/WelcomeScreen.js`)
 - [x] Creator Video Screen (`mobile/src/screens/onboarding/CreatorVideoScreen.js`)
 - [x] Commitment Period Screen (`mobile/src/screens/onboarding/CommitmentPeriodScreen.js`)
@@ -18,6 +18,17 @@ This document provides detailed guidance for implementing the remaining screens 
 ### Main App Screens
 - [x] Home Screen (redesigned) (`mobile/src/screens/HomeScreen.js`)
 - [x] AI Conversation Screen (`mobile/src/screens/AIConversationScreen.js`)
+
+### Payment Request Flow (Complete ✓)
+- [x] Payment Request Screen (`mobile/src/screens/PaymentRequestScreen.js`)
+- [x] Payment Evaluation Screen (`mobile/src/screens/PaymentEvaluationScreen.js`)
+- [x] Payment Approved Screen (`mobile/src/screens/PaymentApprovedScreen.js`)
+- [x] Payment Denied Screen (`mobile/src/screens/PaymentDeniedScreen.js`)
+
+### Phase 2 Screens (Complete ✓)
+- [x] Bills Screen (`mobile/src/screens/BillsScreen.js`)
+- [x] Progress Screen (`mobile/src/screens/ProgressScreen.js`)
+- [x] Profile Screen (`mobile/src/screens/ProfileScreen.js`)
 
 ---
 

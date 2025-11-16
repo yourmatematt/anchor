@@ -1,0 +1,400 @@
+{
+  "comment": "Up Bank Webhook Test Payloads for Anchor",
+  "description": "Test different transaction patterns and interventions",
+
+  "legitimate_whitelisted": {
+    "description": "Normal bill payment (whitelisted)",
+    "data": {
+      "type": "webhook-events",
+      "id": "test-webhook-1",
+      "attributes": {
+        "eventType": "TRANSACTION_CREATED",
+        "createdAt": "2025-11-16T10:30:00+11:00",
+        "amount": {
+          "currencyCode": "AUD",
+          "value": "-75.00",
+          "valueInBaseUnits": -7500
+        },
+        "description": "Telstra Mobile",
+        "rawText": "TELSTRA MOBILE DIRECT DEBIT"
+      },
+      "relationships": {
+        "transaction": {
+          "data": {
+            "type": "transactions",
+            "id": "txn-001-whitelisted"
+          }
+        },
+        "account": {
+          "data": {
+            "type": "accounts",
+            "id": "acc-test-user"
+          }
+        }
+      }
+    }
+  },
+
+  "payday_loan_beforepay": {
+    "description": "CRITICAL: Payday loan from Beforepay (triggers AI + Guardian + resets streak)",
+    "data": {
+      "type": "webhook-events",
+      "id": "test-webhook-2",
+      "attributes": {
+        "eventType": "TRANSACTION_CREATED",
+        "createdAt": "2025-11-16T14:23:00+11:00",
+        "amount": {
+          "currencyCode": "AUD",
+          "value": "200.00",
+          "valueInBaseUnits": 20000
+        },
+        "description": "Beforepay Pty Ltd",
+        "rawText": "BEFOREPAY PTY LTD WAGE ADVANCE"
+      },
+      "relationships": {
+        "transaction": {
+          "data": {
+            "type": "transactions",
+            "id": "txn-002-payday-loan"
+          }
+        },
+        "account": {
+          "data": {
+            "type": "accounts",
+            "id": "acc-test-user"
+          }
+        }
+      }
+    }
+  },
+
+  "gambling_sportsbet": {
+    "description": "CRITICAL: Sportsbet transaction (triggers AI + Guardian + resets streak)",
+    "data": {
+      "type": "webhook-events",
+      "id": "test-webhook-3",
+      "attributes": {
+        "eventType": "TRANSACTION_CREATED",
+        "createdAt": "2025-11-16T21:45:00+11:00",
+        "amount": {
+          "currencyCode": "AUD",
+          "value": "-150.00",
+          "valueInBaseUnits": -15000
+        },
+        "description": "Sportsbet Pty Ltd",
+        "rawText": "SPORTSBET.COM.AU"
+      },
+      "relationships": {
+        "transaction": {
+          "data": {
+            "type": "transactions",
+            "id": "txn-003-sportsbet"
+          }
+        },
+        "account": {
+          "data": {
+            "type": "accounts",
+            "id": "acc-test-user"
+          }
+        }
+      }
+    }
+  },
+
+  "gambling_venue_late_night": {
+    "description": "CRITICAL: Pokies venue late at night (triggers AI + Guardian + resets streak)",
+    "data": {
+      "type": "webhook-events",
+      "id": "test-webhook-4",
+      "attributes": {
+        "eventType": "TRANSACTION_CREATED",
+        "createdAt": "2025-11-16T23:15:00+11:00",
+        "amount": {
+          "currencyCode": "AUD",
+          "value": "-80.00",
+          "valueInBaseUnits": -8000
+        },
+        "description": "Bankstown RSL Club",
+        "rawText": "BANKSTOWN RSL CLUB GAMING"
+      },
+      "relationships": {
+        "transaction": {
+          "data": {
+            "type": "transactions",
+            "id": "txn-004-pokies"
+          }
+        },
+        "account": {
+          "data": {
+            "type": "accounts",
+            "id": "acc-test-user"
+          }
+        }
+      }
+    }
+  },
+
+  "crypto_coinspot": {
+    "description": "CRITICAL: Crypto exchange (triggers AI + Guardian + resets streak)",
+    "data": {
+      "type": "webhook-events",
+      "id": "test-webhook-5",
+      "attributes": {
+        "eventType": "TRANSACTION_CREATED",
+        "createdAt": "2025-11-16T16:30:00+11:00",
+        "amount": {
+          "currencyCode": "AUD",
+          "value": "-300.00",
+          "valueInBaseUnits": -30000
+        },
+        "description": "CoinSpot",
+        "rawText": "COINSPOT PTY LTD"
+      },
+      "relationships": {
+        "transaction": {
+          "data": {
+            "type": "transactions",
+            "id": "txn-005-crypto"
+          }
+        },
+        "account": {
+          "data": {
+            "type": "accounts",
+            "id": "acc-test-user"
+          }
+        }
+      }
+    }
+  },
+
+  "cash_withdrawal_large": {
+    "description": "HIGH: Large ATM withdrawal $150 (triggers AI + Guardian)",
+    "data": {
+      "type": "webhook-events",
+      "id": "test-webhook-6",
+      "attributes": {
+        "eventType": "TRANSACTION_CREATED",
+        "createdAt": "2025-11-16T20:00:00+11:00",
+        "amount": {
+          "currencyCode": "AUD",
+          "value": "-150.00",
+          "valueInBaseUnits": -15000
+        },
+        "description": "ATM Withdrawal",
+        "rawText": "ATM CASH WITHDRAWAL BANKSTOWN"
+      },
+      "relationships": {
+        "transaction": {
+          "data": {
+            "type": "transactions",
+            "id": "txn-006-atm"
+          }
+        },
+        "account": {
+          "data": {
+            "type": "accounts",
+            "id": "acc-test-user"
+          }
+        }
+      }
+    }
+  },
+
+  "suspicious_transfer_tuesday_night": {
+    "description": "HIGH: Transfer on Tuesday night (poker pattern - triggers AI + Guardian)",
+    "data": {
+      "type": "webhook-events",
+      "id": "test-webhook-7",
+      "attributes": {
+        "eventType": "TRANSACTION_CREATED",
+        "createdAt": "2025-11-19T19:30:00+11:00",
+        "amount": {
+          "currencyCode": "AUD",
+          "value": "-100.00",
+          "valueInBaseUnits": -10000
+        },
+        "description": "Transfer to John Smith",
+        "rawText": "OSKO TRANSFER JOHN SMITH"
+      },
+      "relationships": {
+        "transaction": {
+          "data": {
+            "type": "transactions",
+            "id": "txn-007-tuesday-transfer"
+          }
+        },
+        "account": {
+          "data": {
+            "type": "accounts",
+            "id": "acc-test-user"
+          }
+        }
+      }
+    }
+  },
+
+  "suspicious_transfer_late_night": {
+    "description": "HIGH: Late night transfer 2am (triggers AI + Guardian)",
+    "data": {
+      "type": "webhook-events",
+      "id": "test-webhook-8",
+      "attributes": {
+        "eventType": "TRANSACTION_CREATED",
+        "createdAt": "2025-11-17T02:15:00+11:00",
+        "amount": {
+          "currencyCode": "AUD",
+          "value": "-200.00",
+          "valueInBaseUnits": -20000
+        },
+        "description": "Transfer to Sarah Jones",
+        "rawText": "OSKO TRANSFER SARAH JONES"
+      },
+      "relationships": {
+        "transaction": {
+          "data": {
+            "type": "transactions",
+            "id": "txn-008-latenight-transfer"
+          }
+        },
+        "account": {
+          "data": {
+            "type": "accounts",
+            "id": "acc-test-user"
+          }
+        }
+      }
+    }
+  },
+
+  "small_withdrawal_1": {
+    "description": "MEDIUM: Small withdrawal $40 (part of multiple withdrawal pattern)",
+    "data": {
+      "type": "webhook-events",
+      "id": "test-webhook-9a",
+      "attributes": {
+        "eventType": "TRANSACTION_CREATED",
+        "createdAt": "2025-11-16T12:00:00+11:00",
+        "amount": {
+          "currencyCode": "AUD",
+          "value": "-40.00",
+          "valueInBaseUnits": -4000
+        },
+        "description": "ATM Withdrawal",
+        "rawText": "ATM CASH WITHDRAWAL PARRAMATTA"
+      },
+      "relationships": {
+        "transaction": {
+          "data": {
+            "type": "transactions",
+            "id": "txn-009a-multi-atm"
+          }
+        },
+        "account": {
+          "data": {
+            "type": "accounts",
+            "id": "acc-test-user"
+          }
+        }
+      }
+    }
+  },
+
+  "small_withdrawal_2": {
+    "description": "MEDIUM: Small withdrawal $50 (part of multiple withdrawal pattern)",
+    "data": {
+      "type": "webhook-events",
+      "id": "test-webhook-9b",
+      "attributes": {
+        "eventType": "TRANSACTION_CREATED",
+        "createdAt": "2025-11-16T14:30:00+11:00",
+        "amount": {
+          "currencyCode": "AUD",
+          "value": "-50.00",
+          "valueInBaseUnits": -5000
+        },
+        "description": "ATM Withdrawal",
+        "rawText": "ATM CASH WITHDRAWAL WESTFIELD"
+      },
+      "relationships": {
+        "transaction": {
+          "data": {
+            "type": "transactions",
+            "id": "txn-009b-multi-atm"
+          }
+        },
+        "account": {
+          "data": {
+            "type": "accounts",
+            "id": "acc-test-user"
+          }
+        }
+      }
+    }
+  },
+
+  "small_withdrawal_3": {
+    "description": "HIGH: Third small withdrawal $60 (triggers MULTIPLE_WITHDRAWALS pattern - total $150)",
+    "data": {
+      "type": "webhook-events",
+      "id": "test-webhook-9c",
+      "attributes": {
+        "eventType": "TRANSACTION_CREATED",
+        "createdAt": "2025-11-16T17:45:00+11:00",
+        "amount": {
+          "currencyCode": "AUD",
+          "value": "-60.00",
+          "valueInBaseUnits": -6000
+        },
+        "description": "ATM Withdrawal",
+        "rawText": "ATM CASH WITHDRAWAL BANKSTOWN"
+      },
+      "relationships": {
+        "transaction": {
+          "data": {
+            "type": "transactions",
+            "id": "txn-009c-multi-atm"
+          }
+        },
+        "account": {
+          "data": {
+            "type": "accounts",
+            "id": "acc-test-user"
+          }
+        }
+      }
+    }
+  },
+
+  "suspicious_loan_keyword": {
+    "description": "HIGH: Suspicious loan-like credit (triggers AI + Guardian)",
+    "data": {
+      "type": "webhook-events",
+      "id": "test-webhook-10",
+      "attributes": {
+        "eventType": "TRANSACTION_CREATED",
+        "createdAt": "2025-11-16T11:00:00+11:00",
+        "amount": {
+          "currencyCode": "AUD",
+          "value": "150.00",
+          "valueInBaseUnits": 15000
+        },
+        "description": "Quick Cash Advance",
+        "rawText": "QUICK CASH ADVANCE PTY LTD"
+      },
+      "relationships": {
+        "transaction": {
+          "data": {
+            "type": "transactions",
+            "id": "txn-010-sus-loan"
+          }
+        },
+        "account": {
+          "data": {
+            "type": "accounts",
+            "id": "acc-test-user"
+          }
+        }
+      }
+    }
+  }
+}

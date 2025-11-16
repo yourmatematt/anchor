@@ -1,39 +1,74 @@
 {
   "expo": {
     "name": "Anchor",
-    "slug": "anchor-financial",
+    "slug": "anchor-intervention",
+    "scheme": "anchor",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a1a1a"
+      "backgroundColor": "#000000"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.anchor.financial",
-      "buildNumber": "1.0.0",
+      "bundleIdentifier": "com.anchor.intervention",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Anchor needs microphone access to record voice memos for transaction accountability.",
-        "UIBackgroundModes": ["audio", "remote-notification"]
+        "NSMicrophoneUsageDescription": "Anchor needs microphone access for voice-based AI conversations during intervention.",
+        "NSFaceIDUsageDescription": "Anchor requires Face ID to secure access during your commitment period.",
+        "UIBackgroundModes": ["audio", "remote-notification"],
+        "UIRequiresFullScreen": true
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "associatedDomains": ["applinks:anchor.app", "applinks:*.anchor.app"],
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          }
+        ]
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1a1a1a"
+        "backgroundColor": "#000000"
       },
-      "package": "com.anchor.financial",
+      "package": "com.anchor.intervention",
+      "versionCode": 1,
       "permissions": [
         "RECORD_AUDIO",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
-        "USE_FULL_SCREEN_INTENT"
+        "USE_FULL_SCREEN_INTENT",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "*.anchor.app",
+              "pathPrefix": "/guardian-invite"
+            },
+            {
+              "scheme": "anchor"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     "web": {
@@ -44,15 +79,29 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#ff0000",
-          "sounds": ["./assets/alert-sound.wav"]
+          "color": "#DC2626",
+          "sounds": ["./assets/alert-sound.wav"],
+          "mode": "production"
         }
+      ],
+      [
+        "expo-secure-store"
+      ],
+      [
+        "expo-local-authentication"
       ]
     ],
     "extra": {
       "eas": {
         "projectId": "your-project-id-here"
       }
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/your-project-id"
     }
   }
 }

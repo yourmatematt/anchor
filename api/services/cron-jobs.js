@@ -4,14 +4,18 @@
  *
  * Schedule:
  * - EVERY MINUTE: Timeout checks, webhook retries
+ * - EVERY 5 MINUTES: Recent transaction sync (last 24 hours)
+ * - EVERY 15 MINUTES (high-risk times): High-risk user sync
+ * - HOURLY: Weekly transaction sync (last 7 days), vault interest
+ * - DAILY (3am AEST): Full reconciliation, payday sync
  * - DAILY (midnight AEST): Allowance reset, streak updates, bill checks
- * - HOURLY: Up Bank sync, vault interest, pattern checks
  * - WEEKLY (Sunday 6pm): Progress reports
  */
 
 const cron = require('node-cron');
 const { supabase, logError } = require('../utils/supabase');
 const twilio = require('twilio');
+const syncScheduler = require('./sync-scheduler');
 
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -182,42 +186,44 @@ const checkOverdueBills = cron.schedule('0 14 * * *', async () => {
 });
 
 /**
- * HOURLY
- * Sync Up Bank transactions (backup to webhooks)
+ * EVERY 5 MINUTES
+ * Sync recent transactions (last 24 hours) - backup to webhooks
  */
-const syncUpBankTransactions = cron.schedule('0 * * * *', async () => {
+const syncRecentTransactions = cron.schedule('*/5 * * * *', async () => {
   try {
-    console.log('Running Up Bank transaction sync...');
+    console.log('[Cron] Running recent transaction sync (every 5 min)...');
+    await syncScheduler.runRecentSync();
+  } catch (error) {
+    await logError(error, { context: 'cron_sync_recent' });
+  }
+});
 
-    // Get all users with Up Bank tokens
-    const { data: users } = await supabase
-      .from('users')
-      .select('id, up_bank_token')
-      .eq('onboarding_completed', true)
-      .not('up_bank_token', 'is', null);
-
-    if (users) {
-      for (const user of users) {
-        try {
-          // Fetch recent transactions from Up Bank API
-          const response = await fetch('https://api.up.com.au/api/v1/transactions?page[size]=10', {
-            headers: {
-              'Authorization': `Bearer ${user.up_bank_token}`,
-            },
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            // Process transactions (this would call the webhook handler logic)
-            console.log(`Synced ${data.data?.length || 0} transactions for user ${user.id}`);
-          }
-        } catch (error) {
-          console.error(`Failed to sync transactions for user ${user.id}:`, error);
-        }
-      }
+/**
+ * EVERY 15 MINUTES (during high-risk times only)
+ * Sync high-risk users more frequently
+ */
+const syncHighRiskUsers = cron.schedule('*/15 * * * *', async () => {
+  try {
+    // Only run during high-risk times (6pm-4am, weekends)
+    if (syncScheduler.isHighRiskTime()) {
+      console.log('[Cron] Running high-risk user sync (high-risk time detected)...');
+      await syncScheduler.runHighRiskSync();
     }
   } catch (error) {
-    await logError(error, { context: 'cron_sync_up_bank' });
+    await logError(error, { context: 'cron_sync_high_risk' });
+  }
+});
+
+/**
+ * HOURLY
+ * Sync last 7 days to catch any missed transactions
+ */
+const syncWeeklyTransactions = cron.schedule('0 * * * *', async () => {
+  try {
+    console.log('[Cron] Running weekly transaction sync (hourly backup)...');
+    await syncScheduler.runWeeklySync();
+  } catch (error) {
+    await logError(error, { context: 'cron_sync_weekly' });
   }
 });
 
@@ -244,6 +250,33 @@ const calculateVaultInterest = cron.schedule('0 * * * *', async () => {
     }
   } catch (error) {
     await logError(error, { context: 'cron_vault_interest' });
+  }
+});
+
+/**
+ * DAILY at 3am AEST (17:00 UTC)
+ * Full monthly reconciliation (compare Up Bank with database)
+ */
+const runMonthlyReconciliation = cron.schedule('0 17 * * *', async () => {
+  try {
+    console.log('[Cron] Running monthly reconciliation (3am AEST)...');
+    await syncScheduler.runMonthlySync();
+    await syncScheduler.runReconciliation();
+  } catch (error) {
+    await logError(error, { context: 'cron_reconciliation' });
+  }
+});
+
+/**
+ * DAILY at 9am AEST (23:00 UTC previous day)
+ * Sync users in payday period (higher risk of gambling)
+ */
+const syncPaydayUsers = cron.schedule('0 23 * * *', async () => {
+  try {
+    console.log('[Cron] Running payday user sync...');
+    await syncScheduler.runPaydaySync();
+  } catch (error) {
+    await logError(error, { context: 'cron_sync_payday' });
   }
 });
 
@@ -319,12 +352,27 @@ const sendWeeklyProgressReport = cron.schedule('0 8 * * 0', async () => {
 function startCronJobs() {
   console.log('Starting cron jobs...');
 
+  // Every minute
   checkConversationTimeouts.start();
+
+  // Every 5 minutes
+  syncRecentTransactions.start();
+
+  // Every 15 minutes (conditional)
+  syncHighRiskUsers.start();
+
+  // Hourly
+  syncWeeklyTransactions.start();
+  calculateVaultInterest.start();
+
+  // Daily
   resetDailyAllowance.start();
   updateCleanStreaks.start();
   checkOverdueBills.start();
-  syncUpBankTransactions.start();
-  calculateVaultInterest.start();
+  runMonthlyReconciliation.start();
+  syncPaydayUsers.start();
+
+  // Weekly
   sendWeeklyProgressReport.start();
 
   console.log('All cron jobs started successfully');
@@ -337,11 +385,15 @@ function stopCronJobs() {
   console.log('Stopping cron jobs...');
 
   checkConversationTimeouts.stop();
+  syncRecentTransactions.stop();
+  syncHighRiskUsers.stop();
+  syncWeeklyTransactions.stop();
+  calculateVaultInterest.stop();
   resetDailyAllowance.stop();
   updateCleanStreaks.stop();
   checkOverdueBills.stop();
-  syncUpBankTransactions.stop();
-  calculateVaultInterest.stop();
+  runMonthlyReconciliation.stop();
+  syncPaydayUsers.stop();
   sendWeeklyProgressReport.stop();
 
   console.log('All cron jobs stopped');

@@ -56,6 +56,7 @@ app.use('/api/allowance', require('./routes/allowance'));
 app.use('/api/patterns', require('./routes/patterns'));
 app.use('/api/bills', require('./routes/bills'));
 app.use('/api/user', require('./routes/user'));
+app.use('/api/waitlist', require('./routes/waitlist'));
 
 // Webhook routes (no auth required, signature verification instead)
 app.use('/api/webhooks', require('./webhooks/up-bank'));

@@ -101,6 +101,18 @@ const schemas = {
     transaction_id: Joi.string().optional(),
   }),
 
+  // Waitlist submission
+  waitlistSubmit: Joi.object({
+    email: Joi.string().email().required(),
+    name: Joi.string().min(2).max(100).required(),
+    lost_5k: Joi.string().valid('yes', 'no').required(),
+    relapsed: Joi.string().valid('yes', 'no').required(),
+    up_bank: Joi.string().valid('yes', 'will_switch', 'no').required(),
+    guardian: Joi.string().valid('partner', 'parent', 'friend', 'counselor', 'other').required(),
+    ready: Joi.string().valid('yes', 'no').required(),
+    qualification_tier: Joi.string().valid('priority', 'high', 'standard', 'not_ready').required(),
+  }),
+
   // Query pagination
   pagination: Joi.object({
     page: Joi.number().integer().min(1).default(1),

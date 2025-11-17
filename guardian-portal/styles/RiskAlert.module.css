@@ -1,0 +1,179 @@
+.riskAlert {
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 16px;
+  border-left: 4px solid;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+}
+
+.riskAlert:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.alertCritical {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+}
+
+.alertHigh {
+  border-left-color: #ea580c;
+  background: #fff7ed;
+}
+
+.alertMedium {
+  border-left-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.alertLow {
+  border-left-color: #10b981;
+  background: #f0fdf4;
+}
+
+.alertInfo {
+  border-left-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.alertIcon {
+  flex-shrink: 0;
+}
+
+.icon {
+  font-size: 32px;
+  display: block;
+}
+
+.alertContent {
+  flex: 1;
+}
+
+.alertHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.alertType {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #374151;
+}
+
+.alertUrgency {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.1);
+  color: #1f2937;
+}
+
+.alertMessage {
+  font-size: 16px;
+  color: #1f2937;
+  margin-bottom: 8px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.alertRecommendation {
+  font-size: 14px;
+  color: #4b5563;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.alertRecommendation strong {
+  color: #1f2937;
+}
+
+.alertActions {
+  display: flex;
+  gap: 12px;
+}
+
+.actionButton {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  background: #3b82f6;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.actionButton:hover {
+  background: #2563eb;
+}
+
+.dismissButton {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dismissButton:hover {
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+.riskAlertList {
+  display: flex;
+  flex-direction: column;
+}
+
+.noAlerts {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 12px;
+  border: 2px dashed #d1d5db;
+}
+
+.noAlertsIcon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.noAlertsText {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+
+.noAlertsSubtext {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.riskBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+}

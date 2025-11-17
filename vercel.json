@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "name": "anchor",
   "builds": [
     {
       "src": "api/**/*.js",
@@ -7,6 +8,10 @@
     }
   ],
   "routes": [
+    {
+      "src": "/health",
+      "dest": "/api/health.js"
+    },
     {
       "src": "/api/(.*)",
       "dest": "/api/$1"
@@ -16,6 +21,15 @@
     "SUPABASE_URL": "@supabase-url",
     "SUPABASE_ANON_KEY": "@supabase-anon-key",
     "SUPABASE_SERVICE_KEY": "@supabase-service-key",
+    "ANTHROPIC_API_KEY": "@anthropic-api-key",
+    "CLAUDE_MODEL": "@claude-model",
     "UP_WEBHOOK_SECRET": "@up-webhook-secret"
-  }
+  },
+  "functions": {
+    "api/**/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
+  "regions": ["syd1"]
 }

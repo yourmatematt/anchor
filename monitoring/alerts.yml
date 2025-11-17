@@ -1,0 +1,117 @@
+# Prometheus Alert Rules for Anchor
+groups:
+  - name: anchor_api_alerts
+    interval: 30s
+    rules:
+      # API is down
+      - alert: APIDown
+        expr: up{job="anchor-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Anchor API is down"
+          description: "The Anchor API has been down for more than 2 minutes."
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "More than 5% of requests are returning 5xx errors."
+
+      # High response time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API response time"
+          description: "95th percentile response time is above 1 second."
+
+      # Database connection issues
+      - alert: DatabaseConnectionFailure
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection failed"
+          description: "Cannot connect to PostgreSQL database."
+
+      # Redis connection issues
+      - alert: RedisConnectionFailure
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis connection failed"
+          description: "Cannot connect to Redis cache."
+
+      # Disk space warning
+      - alert: DiskSpaceWarning
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "Low disk space"
+          description: "Less than 10% disk space available."
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage"
+          description: "Less than 10% memory available."
+
+  - name: anchor_business_alerts
+    interval: 1m
+    rules:
+      # No webhook received for extended period
+      - alert: NoWebhooksReceived
+        expr: rate(webhook_received_total[1h]) == 0
+        for: 2h
+        labels:
+          severity: warning
+          component: webhook
+        annotations:
+          summary: "No webhooks received"
+          description: "No Up Bank webhooks received in the last 2 hours."
+
+      # High intervention failure rate
+      - alert: HighInterventionFailureRate
+        expr: rate(interventions_failed_total[1h]) / rate(interventions_total[1h]) > 0.2
+        for: 30m
+        labels:
+          severity: warning
+          component: intervention
+        annotations:
+          summary: "High intervention failure rate"
+          description: "More than 20% of interventions are failing."
+
+      # AI API errors
+      - alert: AnthropicAPIErrors
+        expr: rate(anthropic_api_errors_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: ai
+        annotations:
+          summary: "Anthropic API errors detected"
+          description: "Experiencing errors with Anthropic Claude API."

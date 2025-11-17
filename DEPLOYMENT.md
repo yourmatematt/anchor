@@ -1,6 +1,6 @@
 # Anchor Deployment Guide
 
-Complete deployment guide for production.
+Complete deployment guide for production with Docker, CI/CD, monitoring, and backups.
 
 ## Deployment Architecture
 
@@ -8,11 +8,38 @@ Complete deployment guide for production.
 Production Environment:
 ├── Supabase (Database + Realtime)
 │   └── Free tier: Sufficient for single user
-├── Vercel (Backend API)
+├── Vercel (Backend API - Primary)
 │   └── Hobby tier: Sufficient for webhooks
-└── Expo/TestFlight (Mobile App)
-    └── iOS or Android
+├── Railway (Backend API - Alternative)
+│   └── Docker container deployment
+├── Expo/TestFlight (Mobile App)
+│   └── iOS or Android
+├── GitHub Actions (CI/CD)
+│   └── Automated builds, tests, and deployments
+└── Monitoring & Backups
+    ├── Prometheus + Grafana (optional)
+    └── Automated database backups
 ```
+
+## Deployment Options
+
+### Option 1: Vercel (Recommended)
+- **Best for:** Serverless, zero-config deployment
+- **Pros:** Auto-scaling, edge network, generous free tier
+- **Cons:** 10s function timeout on free tier
+- **See:** [Vercel Deployment](#part-2-backend-vercel)
+
+### Option 2: Railway
+- **Best for:** Always-on Docker deployments
+- **Pros:** Full control, longer timeouts, WebSocket support
+- **Cons:** $5/month minimum
+- **See:** [Railway Deployment](#railway-deployment-alternative)
+
+### Option 3: Docker Compose (Local/Self-hosted)
+- **Best for:** Development and self-hosting
+- **Pros:** Complete environment locally, full control
+- **Cons:** Requires server management
+- **See:** [Docker Deployment](#docker-deployment-local--self-hosted)
 
 ## Prerequisites
 

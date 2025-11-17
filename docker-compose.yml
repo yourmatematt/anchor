@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  # Backend API service
+  api:
+    build:
+      context: .
+      target: dev
+      dockerfile: Dockerfile
+    container_name: anchor-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-3-opus-20240229}
+      - UP_WEBHOOK_SECRET=${UP_WEBHOOK_SECRET}
+    volumes:
+      - ./api:/app/api
+      - ./package.json:/app/package.json
+      - /app/node_modules
+    networks:
+      - anchor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL for local development (alternative to Supabase)
+  postgres:
+    image: postgres:15-alpine
+    container_name: anchor-postgres
+    environment:
+      - POSTGRES_DB=anchor
+      - POSTGRES_USER=anchor
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-anchor_dev_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./supabase/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    networks:
+      - anchor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anchor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: anchor-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - anchor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  # Monitoring - Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: anchor-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - anchor-network
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+  # Monitoring - Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: anchor-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    networks:
+      - anchor-network
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  # Backup service
+  backup:
+    image: postgres:15-alpine
+    container_name: anchor-backup
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=anchor
+      - POSTGRES_USER=anchor
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-anchor_dev_password}
+      - BACKUP_SCHEDULE=${BACKUP_SCHEDULE:-0 2 * * *}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/usr/local/bin/backup.sh
+    networks:
+      - anchor-network
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["crond -f -l 2"]
+    restart: unless-stopped
+
+networks:
+  anchor-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:

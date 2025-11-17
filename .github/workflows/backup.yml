@@ -1,0 +1,64 @@
+name: Database Backup
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: 'Backup retention in days'
+        required: false
+        default: '30'
+
+env:
+  RETENTION_DAYS: ${{ github.event.inputs.retention_days || '30' }}
+
+jobs:
+  backup:
+    name: Backup Database
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        if: vars.S3_BACKUP_ENABLED == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create backup
+        env:
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          RETENTION_DAYS: ${{ env.RETENTION_DAYS }}
+        run: |
+          chmod +x scripts/backup.sh
+          mkdir -p backups
+          ./scripts/backup.sh
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: database-backup
+          path: backups/anchor_backup_*.sql*
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Database backup failed!"
+          # Add notification logic here (Slack, email, etc.)

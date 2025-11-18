@@ -1,0 +1,193 @@
+# Prometheus Configuration for Anchor Monitoring
+# Collects metrics from Node.js API, database, and third-party services
+
+global:
+  scrape_interval: 15s # Scrape metrics every 15 seconds
+  evaluation_interval: 15s # Evaluate rules every 15 seconds
+  scrape_timeout: 10s
+
+  external_labels:
+    cluster: 'anchor-production'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'alertmanager:9093'
+      timeout: 10s
+      api_version: v2
+
+# Load alert rules
+rule_files:
+  - '/etc/prometheus/alerts/critical.yml'
+  - '/etc/prometheus/alerts/high.yml'
+  - '/etc/prometheus/alerts/medium.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node.js API server metrics
+  - job_name: 'anchor-api'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets:
+          - 'api-server-1:3000'
+          - 'api-server-2:3000'
+          - 'api-server-3:3000'
+        labels:
+          service: 'api'
+          tier: 'backend'
+
+    # Relabel configs for pod discovery
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+
+  # PostgreSQL database metrics
+  - job_name: 'postgres'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'postgresql'
+          tier: 'database'
+
+  # Redis cache metrics
+  - job_name: 'redis'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+          tier: 'cache'
+
+  # Node exporter for system metrics (CPU, memory, disk)
+  - job_name: 'node-exporter'
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - 'node-exporter-1:9100'
+          - 'node-exporter-2:9100'
+          - 'node-exporter-3:9100'
+        labels:
+          service: 'system'
+          tier: 'infrastructure'
+
+  # Nginx/Load balancer metrics
+  - job_name: 'nginx'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+        labels:
+          service: 'nginx'
+          tier: 'frontend'
+
+  # Custom application metrics
+  - job_name: 'anchor-metrics'
+    scrape_interval: 10s
+    metrics_path: '/api/metrics/prometheus'
+    static_configs:
+      - targets:
+          - 'api-server-1:3000'
+          - 'api-server-2:3000'
+          - 'api-server-3:3000'
+        labels:
+          service: 'custom-metrics'
+          tier: 'application'
+
+  # Third-party API monitoring
+  - job_name: 'third-party-apis'
+    scrape_interval: 60s
+    metrics_path: '/api/metrics/third-party'
+    static_configs:
+      - targets: ['api-server-1:3000']
+        labels:
+          service: 'external-apis'
+          tier: 'integration'
+
+  # Queue monitoring (for sync queue, job queues)
+  - job_name: 'queue-metrics'
+    scrape_interval: 30s
+    metrics_path: '/api/metrics/queues'
+    static_configs:
+      - targets: ['api-server-1:3000']
+        labels:
+          service: 'queues'
+          tier: 'application'
+
+  # ML model performance
+  - job_name: 'ml-metrics'
+    scrape_interval: 30s
+    metrics_path: '/api/metrics/ml'
+    static_configs:
+      - targets: ['api-server-1:3000']
+        labels:
+          service: 'machine-learning'
+          tier: 'ai'
+
+  # Webhook delivery metrics
+  - job_name: 'webhook-metrics'
+    scrape_interval: 30s
+    metrics_path: '/api/metrics/webhooks'
+    static_configs:
+      - targets: ['api-server-1:3000']
+        labels:
+          service: 'webhooks'
+          tier: 'integration'
+
+# Remote write configuration for long-term storage
+remote_write:
+  - url: 'https://prometheus-remote-storage.example.com/api/v1/write'
+    queue_config:
+      capacity: 10000
+      max_shards: 200
+      min_shards: 1
+      max_samples_per_send: 5000
+      batch_send_deadline: 5s
+      min_backoff: 30ms
+      max_backoff: 100ms
+
+    # Authentication
+    basic_auth:
+      username: 'anchor-metrics'
+      password_file: '/etc/prometheus/remote-write-password'
+
+    # Relabel to reduce cardinality for long-term storage
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'go_.*'
+        action: drop # Drop Go runtime metrics
+      - source_labels: [__name__]
+        regex: 'process_.*'
+        action: drop # Drop process metrics
+
+# Remote read configuration
+remote_read:
+  - url: 'https://prometheus-remote-storage.example.com/api/v1/read'
+    read_recent: true
+    basic_auth:
+      username: 'anchor-metrics'
+      password_file: '/etc/prometheus/remote-read-password'
+
+# Storage configuration
+storage:
+  tsdb:
+    path: '/prometheus/data'
+    retention:
+      time: 30d # Keep 30 days locally
+      size: 50GB # Maximum storage size
+
+    # Compaction
+    min_block_duration: 2h
+    max_block_duration: 36h

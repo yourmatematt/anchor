@@ -1,0 +1,479 @@
+{
+  "dashboard": {
+    "title": "Anchor - User Behavior Metrics",
+    "tags": ["anchor", "users", "behavior"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "1m",
+    "time": {
+      "from": "now-7d",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Active Users (DAU/WAU/MAU)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "count(count by (user_id) (user_activity_total{period=\"1d\"}))",
+            "legendFormat": "Daily Active Users (DAU)",
+            "refId": "A"
+          },
+          {
+            "expr": "count(count by (user_id) (user_activity_total{period=\"7d\"}))",
+            "legendFormat": "Weekly Active Users (WAU)",
+            "refId": "B"
+          },
+          {
+            "expr": "count(count by (user_id) (user_activity_total{period=\"30d\"}))",
+            "legendFormat": "Monthly Active Users (MAU)",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Users"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "New User Registrations",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(increase(user_registrations_total[1d]))",
+            "legendFormat": "Daily Registrations",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(increase(user_registrations_total[7d]))",
+            "legendFormat": "Weekly Registrations",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "New Users"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Clean Streak Distribution",
+        "type": "bargauge",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "count by (streak_range) (user_clean_streak_days{streak_range=\"0-7\"})",
+            "legendFormat": "0-7 days",
+            "refId": "A"
+          },
+          {
+            "expr": "count by (streak_range) (user_clean_streak_days{streak_range=\"8-30\"})",
+            "legendFormat": "8-30 days",
+            "refId": "B"
+          },
+          {
+            "expr": "count by (streak_range) (user_clean_streak_days{streak_range=\"31-90\"})",
+            "legendFormat": "31-90 days",
+            "refId": "C"
+          },
+          {
+            "expr": "count by (streak_range) (user_clean_streak_days{streak_range=\"91-365\"})",
+            "legendFormat": "91-365 days",
+            "refId": "D"
+          },
+          {
+            "expr": "count by (streak_range) (user_clean_streak_days{streak_range=\"365+\"})",
+            "legendFormat": "365+ days",
+            "refId": "E"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Intervention Success Rate",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 8, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(intervention_success_total) / sum(intervention_attempts_total) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "orientation": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 60},
+                {"color": "green", "value": 80}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Pattern Detection Accuracy",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 8, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(pattern_detection_correct_total) / sum(pattern_detection_total) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 85},
+                {"color": "green", "value": 95}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Relapse Rate by Recovery Phase",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum by (phase) (rate(user_relapses_total{phase=\"early\"}[7d])) / sum by (phase) (user_count_by_phase{phase=\"early\"}) * 100",
+            "legendFormat": "Early (0-30 days)",
+            "refId": "A"
+          },
+          {
+            "expr": "sum by (phase) (rate(user_relapses_total{phase=\"mid\"}[7d])) / sum by (phase) (user_count_by_phase{phase=\"mid\"}) * 100",
+            "legendFormat": "Mid (31-90 days)",
+            "refId": "B"
+          },
+          {
+            "expr": "sum by (phase) (rate(user_relapses_total{phase=\"late\"}[7d])) / sum by (phase) (user_count_by_phase{phase=\"late\"}) * 100",
+            "legendFormat": "Late (90+ days)",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Relapse Rate %"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Guardian Engagement Level",
+        "type": "piechart",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "count by (engagement_level) (guardian_engagement{level=\"high\"})",
+            "legendFormat": "High Engagement",
+            "refId": "A"
+          },
+          {
+            "expr": "count by (engagement_level) (guardian_engagement{level=\"medium\"})",
+            "legendFormat": "Medium Engagement",
+            "refId": "B"
+          },
+          {
+            "expr": "count by (engagement_level) (guardian_engagement{level=\"low\"})",
+            "legendFormat": "Low Engagement",
+            "refId": "C"
+          },
+          {
+            "expr": "count by (engagement_level) (guardian_engagement{level=\"none\"})",
+            "legendFormat": "No Engagement",
+            "refId": "D"
+          }
+        ],
+        "options": {
+          "pieType": "donut",
+          "legend": {"displayMode": "table", "placement": "right"}
+        }
+      },
+      {
+        "id": 8,
+        "title": "Feature Usage Statistics",
+        "type": "bargauge",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(increase(feature_usage_total{feature=\"ai_conversation\"}[1d]))",
+            "legendFormat": "AI Conversations",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(increase(feature_usage_total{feature=\"transaction_block\"}[1d]))",
+            "legendFormat": "Transaction Blocks",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(increase(feature_usage_total{feature=\"guardian_alert\"}[1d]))",
+            "legendFormat": "Guardian Alerts",
+            "refId": "C"
+          },
+          {
+            "expr": "sum(increase(feature_usage_total{feature=\"emergency_call\"}[1d]))",
+            "legendFormat": "Emergency Calls",
+            "refId": "D"
+          },
+          {
+            "expr": "sum(increase(feature_usage_total{feature=\"report_generation\"}[1d]))",
+            "legendFormat": "Reports Generated",
+            "refId": "E"
+          },
+          {
+            "expr": "sum(increase(feature_usage_total{feature=\"pattern_view\"}[1d]))",
+            "legendFormat": "Pattern Views",
+            "refId": "F"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient"
+        }
+      },
+      {
+        "id": 9,
+        "title": "Daily Transactions Blocked",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(increase(transactions_blocked_total[1d]))",
+            "legendFormat": "Blocked Transactions",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(increase(transactions_allowed_total[1d]))",
+            "legendFormat": "Allowed Transactions",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Transactions"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Average Clean Streak (days)",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 32, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "avg(user_clean_streak_days)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "d",
+            "decimals": 1,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 30},
+                {"color": "green", "value": 90}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Users with Guardians",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 32, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "count(user_has_guardian == 1)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "High-Risk Users",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 32, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "count(user_risk_level{level=\"high\"})",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 10},
+                {"color": "red", "value": 50}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 13,
+        "title": "User Retention (7-day)",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 32, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "count(user_active_7d_ago == 1 AND user_active_today == 1) / count(user_active_7d_ago == 1) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 50},
+                {"color": "green", "value": 70}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 14,
+        "title": "Gambling Amount Saved (AUD)",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 36, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(gambling_amount_saved_total)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "orientation": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyAUD",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": 0}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 15,
+        "title": "User Satisfaction Score",
+        "type": "gauge",
+        "gridPos": {"x": 12, "y": 36, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "avg(user_satisfaction_score)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "min": 0,
+            "max": 5,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 3},
+                {"color": "green", "value": 4}
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "phase",
+          "type": "query",
+          "query": "label_values(user_recovery_phase, phase)",
+          "current": {"text": "All", "value": "$__all"},
+          "multi": true,
+          "includeAll": true
+        },
+        {
+          "name": "risk_level",
+          "type": "query",
+          "query": "label_values(user_risk_level, level)",
+          "current": {"text": "All", "value": "$__all"},
+          "multi": true,
+          "includeAll": true
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,464 @@
+{
+  "dashboard": {
+    "title": "Anchor - System Health",
+    "tags": ["anchor", "system", "health"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "API Response Time (p50, p95, p99)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+            "legendFormat": "{{endpoint}} - p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+            "legendFormat": "{{endpoint}} - p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+            "legendFormat": "{{endpoint}} - p99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Response Time"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [5], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["C", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "60s",
+          "handler": 1,
+          "name": "API Response Time Alert",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 2,
+        "title": "Request Rate (req/sec)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[1m])) by (method, endpoint)",
+            "legendFormat": "{{method}} {{endpoint}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Error Rate by Endpoint",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (endpoint) / sum(rate(http_requests_total[5m])) by (endpoint) * 100",
+            "legendFormat": "{{endpoint}} - 5xx errors",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) by (endpoint) / sum(rate(http_requests_total[5m])) by (endpoint) * 100",
+            "legendFormat": "{{endpoint}} - 4xx errors",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Error Rate %"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [5], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "frequency": "60s",
+          "handler": 1,
+          "name": "High Error Rate Alert"
+        }
+      },
+      {
+        "id": 4,
+        "title": "Database Query Performance",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(database_query_duration_seconds_bucket[5m])) by (le, query_type))",
+            "legendFormat": "{{query_type}} - p95",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(database_query_duration_seconds_bucket[5m])) by (le, query_type))",
+            "legendFormat": "{{query_type}} - p99",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Query Duration"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "CPU Usage",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "{{instance}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "max": 100, "min": 0, "label": "CPU %"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [90], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "frequency": "60s",
+          "handler": 1,
+          "name": "High CPU Usage Alert"
+        }
+      },
+      {
+        "id": 6,
+        "title": "Memory Usage",
+        "type": "graph",
+        "gridPos": {"x": 6, "y": 16, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100",
+            "legendFormat": "{{instance}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "max": 100, "min": 0, "label": "Memory %"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [90], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "frequency": "60s",
+          "handler": 1,
+          "name": "High Memory Usage Alert"
+        }
+      },
+      {
+        "id": 7,
+        "title": "Disk Usage",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 16, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "(node_filesystem_size_bytes{fstype!~\"tmpfs|fuse.lxcfs|squashfs\"} - node_filesystem_avail_bytes{fstype!~\"tmpfs|fuse.lxcfs|squashfs\"}) / node_filesystem_size_bytes{fstype!~\"tmpfs|fuse.lxcfs|squashfs\"} * 100",
+            "legendFormat": "{{instance}} - {{mountpoint}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "max": 100, "min": 0, "label": "Disk %"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Network I/O",
+        "type": "graph",
+        "gridPos": {"x": 18, "y": 16, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(node_network_receive_bytes_total[5m])",
+            "legendFormat": "{{instance}} - receive",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(node_network_transmit_bytes_total[5m])",
+            "legendFormat": "{{instance}} - transmit",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "Bps", "label": "Bytes/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Cache Hit Rate",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(rate(cache_hits_total[5m])) / (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m]))) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "orientation": "auto",
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 70},
+                {"color": "green", "value": 90}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Database Connections",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "pg_stat_activity_count",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "orientation": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 80},
+                {"color": "red", "value": 100}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Webhook Success Rate",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(rate(webhook_success_total[5m])) / sum(rate(webhook_attempts_total[5m])) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 95}
+              ]
+            }
+          }
+        },
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [90], "type": "lt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "frequency": "60s",
+          "handler": 1,
+          "name": "Low Webhook Success Rate Alert"
+        }
+      },
+      {
+        "id": 12,
+        "title": "Queue Depth",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sync_queue_size",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 500},
+                {"color": "red", "value": 1000}
+              ]
+            }
+          }
+        },
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [1000], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "frequency": "60s",
+          "handler": 1,
+          "name": "High Queue Depth Alert"
+        }
+      },
+      {
+        "id": 13,
+        "title": "Third-Party API Latency",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 28, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(third_party_api_duration_seconds_bucket[5m])) by (le, provider))",
+            "legendFormat": "{{provider}} - p95",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Latency"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 14,
+        "title": "API Availability",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 28, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "(sum(rate(http_requests_total{status!~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "orientation": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 3,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 99.0},
+                {"color": "green", "value": 99.9}
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "instance",
+          "type": "query",
+          "query": "label_values(up, instance)",
+          "current": {"text": "All", "value": "$__all"},
+          "multi": true,
+          "includeAll": true
+        },
+        {
+          "name": "endpoint",
+          "type": "query",
+          "query": "label_values(http_requests_total, endpoint)",
+          "current": {"text": "All", "value": "$__all"},
+          "multi": true,
+          "includeAll": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "iconColor": "red",
+          "name": "Alerts",
+          "tagKeys": "alertname,severity",
+          "titleFormat": "Alert: {{alertname}}"
+        }
+      ]
+    }
+  }
+}

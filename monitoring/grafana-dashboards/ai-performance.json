@@ -1,0 +1,512 @@
+{
+  "dashboard": {
+    "title": "Anchor - AI Performance Metrics",
+    "tags": ["anchor", "ai", "ml", "performance"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "AI Conversation Duration (p50, p95, p99)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(ai_conversation_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ai_conversation_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(ai_conversation_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Manipulation Detection Rate",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(ai_manipulation_detected_total[5m])) / sum(rate(ai_conversation_total[5m])) * 100",
+            "legendFormat": "Detection Rate %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Detection Rate"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Voice Transcription Accuracy",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 8, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "avg(voice_transcription_accuracy_percent)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "orientation": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 85},
+                {"color": "green", "value": 95}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Response Generation Time",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 8, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ai_response_generation_duration_seconds_bucket[5m])) by (le))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 2},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        },
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [5], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "frequency": "60s",
+          "handler": 1,
+          "name": "Slow AI Response Alert"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Conversation Outcomes",
+        "type": "piechart",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(ai_conversation_outcome_total{outcome=\"helpful\"})",
+            "legendFormat": "Helpful",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(ai_conversation_outcome_total{outcome=\"intervention_triggered\"})",
+            "legendFormat": "Intervention Triggered",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(ai_conversation_outcome_total{outcome=\"crisis_detected\"})",
+            "legendFormat": "Crisis Detected",
+            "refId": "C"
+          },
+          {
+            "expr": "sum(ai_conversation_outcome_total{outcome=\"neutral\"})",
+            "legendFormat": "Neutral",
+            "refId": "D"
+          }
+        ],
+        "options": {
+          "pieType": "donut",
+          "legend": {"displayMode": "table", "placement": "right"}
+        }
+      },
+      {
+        "id": 6,
+        "title": "Intervention Effectiveness",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(ai_intervention_success_total[1h])) by (intervention_type)",
+            "legendFormat": "{{intervention_type}} - Success",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(ai_intervention_failure_total[1h])) by (intervention_type)",
+            "legendFormat": "{{intervention_type}} - Failure",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Interventions/hour"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "AI Cost per Conversation",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 16, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(increase(ai_cost_total[1h])) / sum(increase(ai_conversation_total[1h]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD",
+            "decimals": 4,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 0.10},
+                {"color": "red", "value": 0.50}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Daily AI Cost",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 16, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(increase(ai_cost_total[1d]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD",
+            "decimals": 2
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Sentiment Distribution",
+        "type": "bargauge",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(ai_sentiment_total{sentiment=\"positive\"})",
+            "legendFormat": "Positive",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(ai_sentiment_total{sentiment=\"neutral\"})",
+            "legendFormat": "Neutral",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(ai_sentiment_total{sentiment=\"negative\"})",
+            "legendFormat": "Negative",
+            "refId": "C"
+          },
+          {
+            "expr": "sum(ai_sentiment_total{sentiment=\"crisis\"})",
+            "legendFormat": "Crisis",
+            "refId": "D"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient"
+        }
+      },
+      {
+        "id": 10,
+        "title": "Crisis Detection Rate",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(ai_crisis_detected_total[1h]))",
+            "legendFormat": "Crisis Detected/hour",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Detections/hour"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 11,
+        "title": "ML Model Inference Time",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ml_model_inference_duration_seconds_bucket[5m])) by (le, model))",
+            "legendFormat": "{{model}} - p95",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Inference Time"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Pattern Detection Confidence",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "avg(pattern_detection_confidence) by (pattern_type)",
+            "legendFormat": "{{pattern_type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percentunit", "max": 1, "min": 0, "label": "Confidence"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 13,
+        "title": "AI Conversations by Hour",
+        "type": "heatmap",
+        "gridPos": {"x": 0, "y": 40, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(increase(ai_conversation_total[1h])) by (hour)",
+            "refId": "A",
+            "format": "time_series"
+          }
+        ],
+        "options": {
+          "calculate": true,
+          "cellGap": 2,
+          "color": {
+            "exponent": 0.5,
+            "fill": "dark-orange",
+            "mode": "scheme",
+            "scale": "exponential",
+            "scheme": "Spectral"
+          }
+        }
+      },
+      {
+        "id": 14,
+        "title": "Voice Input Usage",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 40, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(increase(ai_voice_input_total[1d])) / sum(increase(ai_conversation_total[1d])) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 1
+          }
+        }
+      },
+      {
+        "id": 15,
+        "title": "Text Input Usage",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 40, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(increase(ai_text_input_total[1d])) / sum(increase(ai_conversation_total[1d])) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 1
+          }
+        }
+      },
+      {
+        "id": 16,
+        "title": "Average Conversation Length (messages)",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 44, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "avg(ai_conversation_message_count)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "decimals": 1
+          }
+        }
+      },
+      {
+        "id": 17,
+        "title": "Manipulation Techniques Detected",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 44, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(increase(ai_manipulation_detected_total[1d]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 10},
+                {"color": "red", "value": 50}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 18,
+        "title": "AI Model Errors",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 48, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(ai_model_error_total[5m])) by (error_type)",
+            "legendFormat": "{{error_type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Errors/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 19,
+        "title": "AI Response Quality Score",
+        "type": "gauge",
+        "gridPos": {"x": 12, "y": 48, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "avg(ai_response_quality_score)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "min": 0,
+            "max": 5,
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 3.5},
+                {"color": "green", "value": 4.5}
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "model",
+          "type": "query",
+          "query": "label_values(ml_model_inference_duration_seconds_bucket, model)",
+          "current": {"text": "All", "value": "$__all"},
+          "multi": true,
+          "includeAll": true
+        },
+        {
+          "name": "intervention_type",
+          "type": "query",
+          "query": "label_values(ai_intervention_success_total, intervention_type)",
+          "current": {"text": "All", "value": "$__all"},
+          "multi": true,
+          "includeAll": true
+        }
+      ]
+    }
+  }
+}

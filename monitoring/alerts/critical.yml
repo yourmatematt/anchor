@@ -1,0 +1,352 @@
+# Critical and High Priority Alert Rules for Anchor
+# These alerts trigger immediate notifications via PagerDuty/Opsgenie
+
+groups:
+  # ==================== CRITICAL ALERTS (Immediate Page) ====================
+  - name: critical
+    interval: 30s
+    rules:
+      # API completely down
+      - alert: APIDown
+        expr: up{job="anchor-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          pagerduty: true
+        annotations:
+          summary: "Anchor API is down"
+          description: "API server {{ $labels.instance }} has been down for more than 1 minute"
+          runbook: "https://docs.anchor.com/runbooks/api-down"
+          action: "Check server logs, restart if necessary"
+
+      # Database connection failed
+      - alert: DatabaseConnectionFailed
+        expr: pg_up == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: platform
+          pagerduty: true
+        annotations:
+          summary: "PostgreSQL database is unreachable"
+          description: "Cannot connect to PostgreSQL database"
+          runbook: "https://docs.anchor.com/runbooks/database-down"
+          action: "Check database server status, check connection pool"
+
+      # Webhook failure rate > 10%
+      - alert: HighWebhookFailureRate
+        expr: |
+          (
+            sum(rate(webhook_attempts_total[5m])) -
+            sum(rate(webhook_success_total[5m]))
+          ) / sum(rate(webhook_attempts_total[5m])) * 100 > 10
+        for: 5m
+        labels:
+          severity: critical
+          team: integrations
+          pagerduty: true
+        annotations:
+          summary: "Webhook failure rate exceeds 10%"
+          description: "{{ $value | humanizePercentage }} of webhooks are failing"
+          runbook: "https://docs.anchor.com/runbooks/webhook-failures"
+          action: "Check Up Bank API status, verify webhook endpoint health"
+
+      # Daily allowance reset failed
+      - alert: DailyAllowanceResetFailed
+        expr: increase(daily_allowance_reset_failures_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          pagerduty: true
+        annotations:
+          summary: "Daily allowance reset job failed"
+          description: "{{ $value }} users affected by failed daily allowance reset"
+          runbook: "https://docs.anchor.com/runbooks/allowance-reset"
+          action: "Check cron job logs, manually trigger reset if needed"
+
+      # High error rate (> 5% 5xx errors)
+      - alert: HighServerErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (endpoint) /
+          sum(rate(http_requests_total[5m])) by (endpoint) * 100 > 5
+        for: 3m
+        labels:
+          severity: critical
+          team: platform
+          pagerduty: true
+        annotations:
+          summary: "High server error rate on {{ $labels.endpoint }}"
+          description: "{{ $value | humanizePercentage }} of requests returning 5xx errors"
+          runbook: "https://docs.anchor.com/runbooks/high-error-rate"
+          action: "Check application logs for exceptions"
+
+      # Out of disk space
+      - alert: DiskSpaceCritical
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs"} /
+           node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs"}) * 100 < 5
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          pagerduty: true
+        annotations:
+          summary: "Disk space critically low on {{ $labels.instance }}"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining on {{ $labels.mountpoint }}"
+          runbook: "https://docs.anchor.com/runbooks/disk-space"
+          action: "Clean up logs, increase disk size, check for runaway processes"
+
+  # ==================== HIGH PRIORITY ALERTS (SMS Notification) ====================
+  - name: high
+    interval: 1m
+    rules:
+      # Response time > 5 seconds (p95)
+      - alert: SlowAPIResponse
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint)
+          ) > 5
+        for: 5m
+        labels:
+          severity: high
+          team: platform
+          slack: true
+        annotations:
+          summary: "Slow API response time on {{ $labels.endpoint }}"
+          description: "95th percentile response time is {{ $value | humanizeDuration }}"
+          runbook: "https://docs.anchor.com/runbooks/slow-response"
+          action: "Check database query performance, review recent deployments"
+
+      # Error rate > 5% (4xx + 5xx)
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"[45].."}[5m])) /
+          sum(rate(http_requests_total[5m])) * 100 > 5
+        for: 5m
+        labels:
+          severity: high
+          team: platform
+          slack: true
+        annotations:
+          summary: "High error rate detected"
+          description: "{{ $value | humanizePercentage }} of requests returning errors"
+          runbook: "https://docs.anchor.com/runbooks/error-rate"
+
+      # Queue depth > 1000
+      - alert: HighQueueDepth
+        expr: sync_queue_size > 1000
+        for: 10m
+        labels:
+          severity: high
+          team: platform
+          slack: true
+        annotations:
+          summary: "Sync queue depth is high"
+          description: "{{ $value }} items in sync queue"
+          runbook: "https://docs.anchor.com/runbooks/queue-depth"
+          action: "Check queue processor, increase worker count if needed"
+
+      # Memory usage > 90%
+      - alert: HighMemoryUsage
+        expr: |
+          (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) /
+          node_memory_MemTotal_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: high
+          team: platform
+          slack: true
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+          runbook: "https://docs.anchor.com/runbooks/memory"
+          action: "Check for memory leaks, consider scaling up"
+
+      # CPU usage > 90%
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 5m
+        labels:
+          severity: high
+          team: platform
+          slack: true
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+          runbook: "https://docs.anchor.com/runbooks/cpu"
+          action: "Check for runaway processes, consider scaling up"
+
+      # Database connection pool exhausted
+      - alert: DatabaseConnectionPoolExhausted
+        expr: pg_stat_activity_count > 90
+        for: 3m
+        labels:
+          severity: high
+          team: platform
+          slack: true
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "{{ $value }} active connections (limit: 100)"
+          runbook: "https://docs.anchor.com/runbooks/db-connections"
+          action: "Check for connection leaks, increase pool size if needed"
+
+      # Cache hit rate < 70%
+      - alert: LowCacheHitRate
+        expr: |
+          sum(rate(cache_hits_total[5m])) /
+          (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m]))) * 100 < 70
+        for: 15m
+        labels:
+          severity: high
+          team: platform
+          slack: true
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }}"
+          runbook: "https://docs.anchor.com/runbooks/cache"
+          action: "Review cache TTL settings, check cache warming"
+
+      # ML model slow inference
+      - alert: SlowMLInference
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(ml_model_inference_duration_seconds_bucket[5m])) by (le, model)
+          ) > 2
+        for: 10m
+        labels:
+          severity: high
+          team: ml
+          slack: true
+        annotations:
+          summary: "Slow ML model inference for {{ $labels.model }}"
+          description: "95th percentile inference time is {{ $value | humanizeDuration }}"
+          runbook: "https://docs.anchor.com/runbooks/ml-performance"
+
+      # AI conversation cost spike
+      - alert: HighAICost
+        expr: |
+          sum(increase(ai_cost_total[1h])) > 100
+        for: 5m
+        labels:
+          severity: high
+          team: ml
+          slack: true
+        annotations:
+          summary: "AI cost spike detected"
+          description: "${{ $value }} spent in last hour"
+          runbook: "https://docs.anchor.com/runbooks/ai-cost"
+          action: "Check for API abuse, review usage patterns"
+
+  # ==================== BUSINESS ALERTS ====================
+  - name: business
+    interval: 5m
+    rules:
+      # High relapse rate
+      - alert: HighRelapseRate
+        expr: |
+          sum(rate(user_relapses_total[1d])) /
+          sum(total_users) * 100 > 10
+        for: 1h
+        labels:
+          severity: warning
+          team: product
+          slack: true
+        annotations:
+          summary: "High user relapse rate detected"
+          description: "{{ $value | humanizePercentage }} relapse rate"
+
+      # Low intervention success rate
+      - alert: LowInterventionSuccess
+        expr: |
+          sum(intervention_success_total) /
+          sum(intervention_attempts_total) * 100 < 60
+        for: 1h
+        labels:
+          severity: warning
+          team: product
+          slack: true
+        annotations:
+          summary: "Low intervention success rate"
+          description: "Only {{ $value | humanizePercentage }} interventions successful"
+
+      # Many high-risk users
+      - alert: ManyHighRiskUsers
+        expr: count(user_risk_level{level="high"}) > 50
+        for: 30m
+        labels:
+          severity: warning
+          team: product
+          slack: true
+        annotations:
+          summary: "{{ $value }} users at high risk"
+          description: "Unusually high number of high-risk users"
+
+      # Crisis detection spike
+      - alert: CrisisDetectionSpike
+        expr: |
+          sum(increase(ai_crisis_detected_total[1h])) > 20
+        for: 5m
+        labels:
+          severity: warning
+          team: support
+          slack: true
+        annotations:
+          summary: "Spike in crisis situations detected"
+          description: "{{ $value }} crisis situations detected in last hour"
+          action: "Review crisis cases, ensure support team is available"
+
+# Alertmanager routing configuration
+# Place this in alertmanager.yml
+
+# route:
+#   group_by: ['alertname', 'severity']
+#   group_wait: 10s
+#   group_interval: 10s
+#   repeat_interval: 1h
+#   receiver: 'default'
+#
+#   routes:
+#     # Critical alerts go to PagerDuty
+#     - match:
+#         severity: critical
+#       receiver: pagerduty
+#       continue: true
+#
+#     # High priority to Slack
+#     - match:
+#         severity: high
+#       receiver: slack
+#       continue: true
+#
+#     # Business alerts to product team
+#     - match:
+#         team: product
+#       receiver: product-slack
+#
+# receivers:
+#   - name: 'default'
+#     webhook_configs:
+#       - url: 'http://localhost:5001/'
+#
+#   - name: 'pagerduty'
+#     pagerduty_configs:
+#       - service_key: '<PAGERDUTY_SERVICE_KEY>'
+#         description: '{{ .CommonAnnotations.summary }}'
+#         details:
+#           firing: '{{ .Alerts.Firing | len }}'
+#           resolved: '{{ .Alerts.Resolved | len }}'
+#
+#   - name: 'slack'
+#     slack_configs:
+#       - api_url: '<SLACK_WEBHOOK_URL>'
+#         channel: '#anchor-alerts'
+#         title: '{{ .CommonAnnotations.summary }}'
+#         text: '{{ .CommonAnnotations.description }}'
+#
+#   - name: 'product-slack'
+#     slack_configs:
+#       - api_url: '<SLACK_WEBHOOK_URL>'
+#         channel: '#anchor-product'
